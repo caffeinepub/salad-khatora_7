@@ -95,14 +95,6 @@ export interface Coupon {
     isActive: boolean;
 }
 
-export type LeadStatus = { __kind__: "new"; new: null } | { __kind__: "contacted"; contacted: null } | { __kind__: "converted"; converted: null };
-export interface Lead {
-    id: bigint;
-    name: string;
-    mobile: string;
-    date: bigint;
-    status: LeadStatus;
-}
 
 export interface MenuItem {
     id: bigint;
@@ -169,9 +161,6 @@ export interface backendInterface {
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateSubscriptionStatus(user: Principal, status: Variant_active_expired): Promise<void>;
     updateUserProfile(profile: UserProfile): Promise<void>;
-    saveLead(name: string, mobile: string): Promise<bigint>;
-    getAllLeads(): Promise<Array<Lead>>;
-    updateLeadStatus(id: bigint, status: LeadStatus): Promise<void>;
     getAllMenuItems(): Promise<Array<MenuItem>>;
     addMenuItem(name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>): Promise<bigint>;
     updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>): Promise<void>;

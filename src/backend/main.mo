@@ -85,19 +85,7 @@ actor {
     quantityPerOrder : Nat;
   };
 
-  public type LeadStatus = {
-    #new_;
-    #contacted;
-    #converted;
-  };
 
-  public type Lead = {
-    id : Nat;
-    name : Text;
-    mobile : Text;
-    date : Time.Time;
-    status : LeadStatus;
-  };
 
   // V1 type kept for stable variable compatibility (migration)
   type MenuItemV1 = {
@@ -136,11 +124,15 @@ actor {
   var nextOrderId = 0;
   var nextIngredientId = 0;
   var nextMenuItemId = 0;
-  let leads = Map.empty<Nat, Lead>();
-  var nextLeadId = 0;
-
   // Migration flag: ensures we only migrate once
   var menuItemsMigrated = false;
+
+  // ─── Legacy stable vars (kept for upgrade compatibility — do not remove) ──────
+  type LeadStatus = { #new_; #contacted; #converted };
+  type Lead = { id : Nat; name : Text; mobile : Text; date : Time.Time; status : LeadStatus };
+  let leads = Map.empty<Nat, Lead>();
+  var nextLeadId = 0;
+  // ──────────────────────────────────────────────────────────────────────────────
 
   // Migrate data from legacy menuItems (V1, no tags) into menuItemsV2 (with tags)
   system func postupgrade() {
@@ -476,48 +468,6 @@ actor {
     };
   };
 
-  // ─── Leads ───────────────────────────────────────────────────────────────────
-  public shared func saveLead(name : Text, mobile : Text) : async Nat {
-    let id = nextLeadId;
-    nextLeadId += 1;
-    let lead : Lead = {
-      id;
-      name;
-      mobile;
-      date = Time.now();
-      status = #new_;
-    };
-    leads.add(id, lead);
-    id
-  };
-
-  public query ({ caller }) func getAllLeads() : async [Lead] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view leads");
-    };
-    leads.values().toArray()
-  };
-
-  public shared ({ caller }) func updateLeadStatus(id : Nat, status : LeadStatus) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update lead status");
-    };
-    switch (leads.get(id)) {
-      case (?lead) {
-        let updatedLead : Lead = {
-          id = lead.id;
-          name = lead.name;
-          mobile = lead.mobile;
-          date = lead.date;
-          status;
-        };
-        leads.add(id, updatedLead);
-      };
-      case (null) {
-        Runtime.trap("Lead not found");
-      };
-    };
-  };
 
   // ─── Menu Management ──────────────────────────────────────────────────────────
   // Public query: anyone can browse the menu (reads from V2 map with tags)

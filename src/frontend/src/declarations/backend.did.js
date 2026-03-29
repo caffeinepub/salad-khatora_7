@@ -136,9 +136,6 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateUserProfile' : IDL.Func([UserProfile], [], []),
-    'saveLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
-    'getAllLeads' : IDL.Func([], [IDL.Vec(Lead)], ['query']),
-    'updateLeadStatus' : IDL.Func([IDL.Nat, LeadStatus], [], []),
   'claimFirstAdminRole' : IDL.Func([], [], []),
   'hasAdminBeenClaimed' : IDL.Func([], [IDL.Bool], ['query']),
   'getAllMenuItems' : IDL.Func([], [IDL.Vec(MenuItemIDL)], ['query']),
@@ -212,18 +209,6 @@ export const idlFactory = ({ IDL }) => {
     'instant' : IDL.Null,
   });
   
-  const LeadStatus = IDL.Variant({
-    'new_' : IDL.Null,
-    'contacted' : IDL.Null,
-    'converted' : IDL.Null,
-  });
-  const Lead = IDL.Record({
-    'id' : IDL.Nat,
-    'name' : IDL.Text,
-    'mobile' : IDL.Text,
-    'date' : Time,
-    'status' : LeadStatus,
-  });
   const MenuItem = IDL.Record({
     'id' : IDL.Nat,
     'name' : IDL.Text,
@@ -326,9 +311,6 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateUserProfile' : IDL.Func([UserProfile], [], []),
-    'saveLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
-    'getAllLeads' : IDL.Func([], [IDL.Vec(Lead)], ['query']),
-    'updateLeadStatus' : IDL.Func([IDL.Nat, LeadStatus], [], []),
   'claimFirstAdminRole' : IDL.Func([], [], []),
   'hasAdminBeenClaimed' : IDL.Func([], [IDL.Bool], ['query']),
     'getAllMenuItems' : IDL.Func([], [IDL.Vec(MenuItem)], ['query']),

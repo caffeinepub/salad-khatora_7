@@ -1,43 +1,32 @@
-# Salad Khatora - Advanced Customer Management
+# Salad Khatora — Customer Management System
 
 ## Current State
-The Users tab in `/admin` shows a basic table with Name, Mobile, Email, Address, Principal. No search, no filters, no user details page, no insights, no notes, no admin actions beyond viewing.
-
-Backend has:
-- `getAllUsers()` returning principal + profile
-- `getAllOrders()` (admin)
-- `getAllSubscriptions()` (admin)
-- `UserProfile` with name, mobile, email, address, heightCm, weightKg, age, dietaryPreferences, dietaryRestrictions
+The admin panel at `/admin` has a Users tab (`UsersTab` component in `AdminPanel.tsx`) implemented in Version 22. It includes: user list with search/filter, `UserDetailSheet` slide-over with profile, insights, subscription, order history, notes, quick actions (WhatsApp, Offer Discount), and admin actions (edit, delete, VIP toggle). Backend has all required functions: `getAllUsers`, `getAllOrders`, `getAllSubscriptions`, `getUserMeta`, `setUserVip`, `addUserNote`, `deleteUserNote`, `deleteUser`, `updateUserProfileByAdmin`.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Backend: `UserNote` type with id, principal, text, createdAt
-- Backend: `UserMeta` type with isVip flag, notes array
-- Backend: `addUserNote(principal, text)` - admin only
-- Backend: `deleteUserNote(principal, noteId)` - admin only
-- Backend: `setUserVip(principal, isVip)` - admin only
-- Backend: `deleteUser(principal)` - admin removes user profile and meta
-- Backend: `updateUserProfileByAdmin(principal, profile)` - admin edits any user
-- Backend: `getUserMeta(principal)` - returns isVip + notes for a user
-- Frontend: Full Users tab replacement with search, filters, user list with rich fields
-- Frontend: User details slide-out/page with profile, order history, subscription, insights, notes, quick actions
-- Frontend: Admin actions (edit, delete, VIP toggle, WhatsApp, Offer Discount)
+- Engagement tracking: show "Inactive 7d" / "Inactive 15d" badges in the user list
+- Filter for inactive users (no orders in last 7/15 days) in the Users List
+- Last order date column visible in user list cards
+- Active subscription (Yes/No) clearly shown in user list
+- Total orders count in user list cards
+- Average order value in User Insights section
+- Favorite salads (most ordered) in User Insights
 
 ### Modify
-- `UsersTab` component in AdminPanel.tsx: replace simple table with advanced customer management UI
+- Ensure the Users List shows: Name, Mobile, Email, Total Orders, Active Subscription (Yes/No badge), Last Order Date
+- Ensure filters work: All, Active Users, Inactive Users, Subscribers
+- Search by name OR mobile
+- User Detail Sheet must show full profile (Name, Mobile, Email, Address, Age, Height, Weight, BMI)
+- Ensure all sections in detail sheet are present: Profile, Order History, Subscription Details, User Insights, Notes, Admin Actions, Quick Actions
 
 ### Remove
-- Simple address/principal columns from Users table
+- Nothing to remove
 
 ## Implementation Plan
-1. Add new backend functions: addUserNote, deleteUserNote, setUserVip, deleteUser, updateUserProfileByAdmin, getUserMeta
-2. Update IDL bindings (backend.did.js, backend.did.d.ts, backend.ts)
-3. Replace UsersTab with advanced CustomerManagement component:
-   - Users list with search (name/mobile), filter chips (All/Active/Inactive/Subscribers), columns: Name, Mobile, Email, Total Orders, Subscription, Last Order
-   - Clicking a user opens a detail panel/drawer showing profile, BMI, order history, subscription, insights, notes, admin actions
-   - Notes section with add/delete
-   - VIP badge and toggle
-   - WhatsApp button (opens wa.me link), Offer Discount button (placeholder)
-   - Delete user with confirmation
-   - Edit user profile modal
+1. Review existing `UsersTab` in AdminPanel.tsx and verify all list fields are displayed correctly
+2. Ensure filter logic handles `inactive7` and `inactive15` cases (no orders in last 7/15 days)
+3. Verify UserDetailSheet has all required sections
+4. Fix any TypeScript errors or missing data
+5. Validate and build

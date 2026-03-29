@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useActor } from "@/hooks/useActor";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -13,8 +12,6 @@ export function FreeSamplePopup() {
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const { actor } = useActor();
-
   useEffect(() => {
     const dismissed = localStorage.getItem(STORAGE_KEY);
     if (!dismissed) {
@@ -31,13 +28,6 @@ export function FreeSamplePopup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !mobile.trim()) return;
-
-    // Save lead to backend (best effort — don't block UX if it fails)
-    if (actor) {
-      actor.saveLead(name.trim(), mobile.trim()).catch(() => {
-        // silently ignore
-      });
-    }
 
     const msg = encodeURIComponent(
       `Hi! I'm ${name} (${mobile}). I'd like to claim my FREE sample salad from Salad Khatora!`,

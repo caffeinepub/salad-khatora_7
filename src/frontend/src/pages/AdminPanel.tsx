@@ -84,8 +84,6 @@ import {
   DeliveryStatus,
   type DiscountType,
   type Ingredient,
-  type Lead,
-  type LeadStatus,
   type MenuItem,
   type Order,
   OrderStatus,
@@ -1250,7 +1248,7 @@ function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<
-    "all" | "active" | "inactive" | "subscribers"
+    "all" | "active" | "inactive7" | "inactive15" | "subscribers"
   >("all");
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
 
@@ -1291,14 +1289,13 @@ function UsersTab() {
         u.profile.mobile.toLowerCase().includes(s);
 
       const stats = statsMap[u.principal.toString()];
+      const days =
+        stats.lastOrderDate !== null ? daysSince(stats.lastOrderDate) : null;
       const matchFilter =
         filter === "all" ||
-        (filter === "active" &&
-          stats.lastOrderDate !== null &&
-          daysSince(stats.lastOrderDate) < 7) ||
-        (filter === "inactive" &&
-          (stats.lastOrderDate === null ||
-            daysSince(stats.lastOrderDate) >= 7)) ||
+        (filter === "active" && days !== null && days < 7) ||
+        (filter === "inactive7" && (days === null || days >= 7)) ||
+        (filter === "inactive15" && (days === null || days >= 15)) ||
         (filter === "subscribers" && stats.hasSubscription);
 
       return matchSearch && matchFilter;
@@ -1338,21 +1335,23 @@ function UsersTab() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {(["all", "active", "inactive", "subscribers"] as const).map((f) => (
+          {(
+            [
+              { key: "all", label: `All (${users.length})` },
+              { key: "active", label: "Active" },
+              { key: "inactive7", label: "Inactive 7d" },
+              { key: "inactive15", label: "Inactive 15d" },
+              { key: "subscribers", label: "Subscribers" },
+            ] as const
+          ).map(({ key, label }) => (
             <button
               type="button"
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
-              data-ocid={`admin.users.${f}.tab`}
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+              data-ocid={`admin.users.${key}.tab`}
             >
-              {f === "all"
-                ? `All (${users.length})`
-                : f === "active"
-                  ? "Active"
-                  : f === "inactive"
-                    ? "Inactive"
-                    : "Subscribers"}
+              {label}
             </button>
           ))}
         </div>
@@ -1371,9 +1370,6 @@ function UsersTab() {
         <div className="space-y-2" data-ocid="admin.users.list">
           {filtered.map((u, i) => {
             const stats = statsMap[u.principal.toString()];
-            const isInactive =
-              stats.lastOrderDate === null ||
-              daysSince(stats.lastOrderDate) >= 7;
             return (
               <button
                 type="button"
@@ -1382,46 +1378,75 @@ function UsersTab() {
                 className="w-full text-left border border-border/60 rounded-xl p-4 hover:bg-muted/30 transition-colors"
                 data-ocid={`admin.users.item.${i + 1}`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0 mt-0.5">
                       {(u.profile.name || "?")[0].toUpperCase()}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-semibold text-sm truncate">
                           {u.profile.name || "—"}
                         </p>
+                        {(() => {
+                          const d =
+                            stats.lastOrderDate !== null
+                              ? daysSince(stats.lastOrderDate)
+                              : null;
+                          if (d === null || d >= 15)
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-red-500 border-red-300 text-[10px] px-1.5 py-0"
+                              >
+                                Inactive 15d
+                              </Badge>
+                            );
+                          if (d >= 7)
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-amber-600 border-amber-300 text-[10px] px-1.5 py-0"
+                              >
+                                Inactive 7d
+                              </Badge>
+                            );
+                          return null;
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {u.profile.mobile || "—"}
                       </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {u.profile.email || "—"}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {stats.hasSubscription && (
-                      <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">
-                        Sub
-                      </Badge>
-                    )}
-                    {isInactive && stats.totalOrders > 0 && (
-                      <Badge
-                        variant="outline"
-                        className="text-amber-600 border-amber-300 text-xs"
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0 text-right">
+                    <p className="text-xs font-semibold text-primary">
+                      {stats.totalOrders} orders
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Sub:{" "}
+                      <span
+                        className={
+                          stats.hasSubscription
+                            ? "text-green-600 font-medium"
+                            : ""
+                        }
                       >
-                        Inactive
-                      </Badge>
-                    )}
-                    <div className="text-right">
-                      <p className="text-xs font-semibold text-primary">
-                        {stats.totalOrders} orders
+                        {stats.hasSubscription ? "Yes" : "No"}
+                      </span>
+                    </p>
+                    {stats.lastOrderDate ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        Last: {formatDateReadable(stats.lastOrderDate)}
                       </p>
-                      {stats.lastOrderDate && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatDateReadable(stats.lastOrderDate)}
-                        </p>
-                      )}
-                    </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">
+                        No orders
+                      </p>
+                    )}
                   </div>
                 </div>
               </button>
@@ -2445,222 +2470,6 @@ function MenuManagementTab() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── Leads Tab ───────────────────────────────────────────────────────────────
-function LeadsTab() {
-  const { actor } = useActor();
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "today" | "week">("all");
-
-  useEffect(() => {
-    if (!actor) return;
-    actor
-      .getAllLeads()
-      .then((data) => {
-        setLeads(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [actor]);
-
-  function getStatusLabel(status: LeadStatus) {
-    if (status.__kind__ === "new_") return "New";
-    if (status.__kind__ === "contacted") return "Contacted";
-    return "Converted";
-  }
-
-  function getStatusVariant(
-    status: LeadStatus,
-  ): "default" | "secondary" | "outline" {
-    if (status.__kind__ === "new_") return "default";
-    if (status.__kind__ === "contacted") return "secondary";
-    return "outline";
-  }
-
-  function getStatusClass(status: LeadStatus) {
-    if (status.__kind__ === "new_")
-      return "bg-blue-100 text-blue-700 border-blue-200";
-    if (status.__kind__ === "contacted")
-      return "bg-amber-100 text-amber-700 border-amber-200";
-    return "bg-green-100 text-green-700 border-green-200";
-  }
-
-  function filterLeads(leads: Lead[]) {
-    if (filter === "today") {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const startMs = startOfDay.getTime();
-      return leads.filter((l) => Number(l.date) / 1_000_000 >= startMs);
-    }
-    if (filter === "week") {
-      const startOfWeek = new Date();
-      const day = startOfWeek.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      startOfWeek.setDate(startOfWeek.getDate() + diff);
-      startOfWeek.setHours(0, 0, 0, 0);
-      return leads.filter(
-        (l) => Number(l.date) / 1_000_000 >= startOfWeek.getTime(),
-      );
-    }
-    return leads;
-  }
-
-  async function markStatus(id: bigint, kind: "contacted" | "converted") {
-    if (!actor) return;
-    const status: LeadStatus =
-      kind === "contacted"
-        ? { __kind__: "contacted", contacted: null }
-        : { __kind__: "converted", converted: null };
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
-    try {
-      await actor.updateLeadStatus(id, status);
-      toast.success(`Lead marked as ${kind}`);
-    } catch {
-      toast.error("Failed to update lead status");
-      actor
-        .getAllLeads()
-        .then(setLeads)
-        .catch(() => {});
-    }
-  }
-
-  const filtered = filterLeads(leads);
-  const total = leads.length;
-  const newCount = leads.filter((l) => l.status.__kind__ === "new_").length;
-  const contactedCount = leads.filter(
-    (l) => l.status.__kind__ === "contacted",
-  ).length;
-  const convertedCount = leads.filter(
-    (l) => l.status.__kind__ === "converted",
-  ).length;
-
-  return (
-    <div className="space-y-4">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total", value: total, cls: "text-foreground" },
-          { label: "New", value: newCount, cls: "text-blue-600" },
-          { label: "Contacted", value: contactedCount, cls: "text-amber-600" },
-          { label: "Converted", value: convertedCount, cls: "text-green-600" },
-        ].map((s) => (
-          <Card key={s.label} className="py-3">
-            <CardContent className="px-4 py-0 text-center">
-              <div className={`text-2xl font-bold ${s.cls}`}>{s.value}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {s.label}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filter buttons */}
-      <div className="flex gap-2" data-ocid="leads.tab">
-        {(["all", "today", "week"] as const).map((f) => (
-          <Button
-            key={f}
-            size="sm"
-            variant={filter === f ? "default" : "outline"}
-            onClick={() => setFilter(f)}
-            data-ocid={`leads.${f}.button`}
-          >
-            {f === "all" ? "All" : f === "today" ? "Today" : "This Week"}
-          </Button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-4 space-y-3" data-ocid="leads.loading_state">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-md" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div
-              className="py-12 text-center text-muted-foreground"
-              data-ocid="leads.empty_state"
-            >
-              No leads found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table data-ocid="leads.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Mobile</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((lead, idx) => (
-                    <TableRow
-                      key={String(lead.id)}
-                      data-ocid={`leads.item.${idx + 1}`}
-                    >
-                      <TableCell className="font-medium">{lead.name}</TableCell>
-                      <TableCell>{lead.mobile}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(
-                          Number(lead.date) / 1_000_000,
-                        ).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={`text-xs border ${getStatusClass(lead.status)}`}
-                          variant={getStatusVariant(lead.status)}
-                        >
-                          {getStatusLabel(lead.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {lead.status.__kind__ === "new_" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 px-2"
-                              onClick={() => markStatus(lead.id, "contacted")}
-                              data-ocid={`leads.contacted.button.${idx + 1}`}
-                            >
-                              Mark Contacted
-                            </Button>
-                          )}
-                          {lead.status.__kind__ !== "converted" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 px-2 text-green-600 border-green-200 hover:bg-green-50"
-                              onClick={() => markStatus(lead.id, "converted")}
-                              data-ocid={`leads.converted.button.${idx + 1}`}
-                            >
-                              Mark Converted
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -3930,13 +3739,6 @@ export default function AdminPanel() {
               Inventory
             </TabsTrigger>
             <TabsTrigger
-              value="leads"
-              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
-              data-ocid="admin.leads.tab"
-            >
-              Leads
-            </TabsTrigger>
-            <TabsTrigger
               value="menu"
               className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
               data-ocid="admin.menu.tab"
@@ -3976,9 +3778,6 @@ export default function AdminPanel() {
           </TabsContent>
           <TabsContent value="inventory">
             <InventoryTab />
-          </TabsContent>
-          <TabsContent value="leads">
-            <LeadsTab />
           </TabsContent>
           <TabsContent value="menu">
             <MenuManagementTab />

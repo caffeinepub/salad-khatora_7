@@ -68,9 +68,6 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
-export type LeadStatus = { 'new_' : null } |
-  { 'contacted' : null } |
-  { 'converted' : null };
 export interface MenuItem {
   'id' : bigint,
   'name' : string,
@@ -82,13 +79,6 @@ export interface MenuItem {
   'enabled' : boolean,
 }
 
-export interface Lead {
-  'id' : bigint,
-  'name' : string,
-  'mobile' : string,
-  'date' : Time,
-  'status' : LeadStatus,
-}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
@@ -124,9 +114,6 @@ export interface _SERVICE {
     undefined
   >,
   'updateUserProfile' : ActorMethod<[UserProfile], undefined>,
-  'saveLead' : ActorMethod<[string, string], bigint>,
-  'getAllLeads' : ActorMethod<[], Array<Lead>>,
-  'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], undefined>,
   'claimFirstAdminRole' : ActorMethod<[], undefined>,
   'hasAdminBeenClaimed' : ActorMethod<[], boolean>,
   'getAllMenuItems' : ActorMethod<[], Array<MenuItem>>,

@@ -114,23 +114,6 @@ export interface MenuItemIngredient {
     ingredientId: bigint;
     quantityPerOrder: bigint;
 }
-export type LeadStatus = {
-    __kind__: "new_";
-    new_: null;
-} | {
-    __kind__: "contacted";
-    contacted: null;
-} | {
-    __kind__: "converted";
-    converted: null;
-};
-export interface Lead {
-    id: bigint;
-    name: string;
-    mobile: string;
-    date: bigint;
-    status: LeadStatus;
-}
 
 export type DiscountType = { __kind__: "percentage"; percentage: null } | { __kind__: "flat"; flat: null };
 export interface Coupon {
@@ -254,9 +237,6 @@ export interface backendInterface {
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateSubscriptionStatus(user: Principal, status: Variant_active_expired): Promise<void>;
     updateUserProfile(profile: UserProfile): Promise<void>;
-    saveLead(name: string, mobile: string): Promise<bigint>;
-    getAllLeads(): Promise<Lead[]>;
-    updateLeadStatus(id: bigint, status: LeadStatus): Promise<void>;
     hasAdminBeenClaimed(): Promise<boolean>;
     claimFirstAdminRole(): Promise<void>;
     getAllMenuItems(): Promise<Array<MenuItem>>;
@@ -641,42 +621,6 @@ export class Backend implements backendInterface {
             const result = await this.actor.updateUserProfile(arg0);
             return result;
         }
-    }
-    async saveLead(name: string, mobile: string): Promise<bigint> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.saveLead(name, mobile);
-                return result as bigint;
-            } catch (e) {
-                this.processError(e);
-            }
-        }
-        const result = await this.actor.saveLead(name, mobile);
-        return result as bigint;
-    }
-    async getAllLeads(): Promise<Lead[]> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllLeads();
-                return result as Lead[];
-            } catch (e) {
-                this.processError(e);
-            }
-        }
-        const result = await this.actor.getAllLeads();
-        return result as Lead[];
-    }
-    async updateLeadStatus(id: bigint, status: LeadStatus): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.updateLeadStatus(id, status);
-                return result as void;
-            } catch (e) {
-                this.processError(e);
-            }
-        }
-        const result = await this.actor.updateLeadStatus(id, status);
-        return result as void;
     }
     async hasAdminBeenClaimed(): Promise<boolean> {
         if (this.processError) {
