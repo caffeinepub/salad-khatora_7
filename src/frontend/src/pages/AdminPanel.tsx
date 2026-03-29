@@ -1,0 +1,3997 @@
+import Footer from "@/components/Footer";
+import Navbar from "@/components/Navbar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useActor } from "@/hooks/useActor";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  IndianRupee,
+  Leaf,
+  Loader2,
+  MapPin,
+  Package,
+  Pencil,
+  Search,
+  ShieldAlert,
+  ShoppingCart,
+  Star,
+  Tag,
+  Trash2,
+  TrendingUp,
+  Truck,
+  UserCheck,
+  Users,
+  Utensils,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "../auth-context";
+import {
+  type Coupon,
+  type DeliveryRecord,
+  DeliveryStatus,
+  type DiscountType,
+  type Ingredient,
+  type Lead,
+  type LeadStatus,
+  type MenuItem,
+  type Order,
+  OrderStatus,
+  type Rider,
+  type Subscription,
+  Variant_active_expired,
+  Variant_monthly_weekly,
+} from "../backend";
+
+const MENU_ITEMS = [
+  "Caesar Salad",
+  "Garden Fresh",
+  "Greek Salad",
+  "Mango Tango",
+  "Protein Bowl",
+  "Quinoa Delight",
+];
+
+function formatDate(ts: bigint) {
+  return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function truncatePrincipal(p: { toString(): string }) {
+  const s = p.toString();
+  return s.length > 12 ? `${s.slice(0, 10)}...` : s;
+}
+
+// ─── Analytics Tab ───────────────────────────────────────────────────────────
+function AnalyticsTab() {
+  const { actor, isFetching } = useActor();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    Promise.all([actor.getAllOrders(), actor.getAllSubscriptions()])
+      .then(([o, s]) => {
+        setOrders(o);
+        setSubscriptions(s);
+      })
+      .catch(() => toast.error("Failed to load analytics data"))
+      .finally(() => setLoading(false));
+  }, [actor, isFetching]);
+
+  // Compute stats
+  const now = new Date();
+
+  function isToday(ts: bigint) {
+    const d = new Date(Number(ts) / 1_000_000);
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  }
+
+  function isThisWeek(ts: bigint) {
+    const d = new Date(Number(ts) / 1_000_000);
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    return d >= monday && d <= sunday;
+  }
+
+  function isThisMonth(ts: bigint) {
+    const d = new Date(Number(ts) / 1_000_000);
+    return (
+      d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+    );
+  }
+
+  const ordersToday = orders.filter((o) => isToday(o.createdAt)).length;
+  const ordersWeek = orders.filter((o) => isThisWeek(o.createdAt)).length;
+  const ordersMonth = orders.filter((o) => isThisMonth(o.createdAt)).length;
+  const totalRevenue = orders.reduce(
+    (sum, o) => sum + Number(o.totalAmount),
+    0,
+  );
+  const activeSubscriptions = subscriptions.filter(
+    (s) => s.status === Variant_active_expired.active,
+  ).length;
+
+  // Most ordered salads
+  const saladCounts: Record<string, number> = {};
+  for (const order of orders) {
+    for (const item of order.items) {
+      saladCounts[item.saladName] =
+        (saladCounts[item.saladName] ?? 0) + Number(item.quantity);
+    }
+  }
+  const topSalads = Object.entries(saladCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxCount = topSalads[0]?.[1] ?? 1;
+
+  const formatCurrency = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+  const statCards = [
+    {
+      label: "Orders Today",
+      value: ordersToday,
+      icon: ShoppingCart,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+    },
+    {
+      label: "Orders This Week",
+      value: ordersWeek,
+      icon: TrendingUp,
+      color: "text-indigo-600",
+      bg: "bg-indigo-50",
+    },
+    {
+      label: "Orders This Month",
+      value: ordersMonth,
+      icon: Package,
+      color: "text-violet-600",
+      bg: "bg-violet-50",
+    },
+    {
+      label: "Total Revenue",
+      value: formatCurrency(totalRevenue),
+      icon: IndianRupee,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+    },
+    {
+      label: "Active Subscriptions",
+      value: activeSubscriptions,
+      icon: Star,
+      color: "text-amber-600",
+      bg: "bg-amber-50",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="space-y-6" data-ocid="admin.analytics.loading_state">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Skeleton key={n} className="h-28 w-full rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8" data-ocid="admin.analytics.section">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <BarChart3 className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-bold text-foreground">Overview</h2>
+        <span className="text-xs text-muted-foreground ml-1">
+          All time stats
+        </span>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {statCards.map((card) => (
+          <Card
+            key={card.label}
+            className="border border-border rounded-2xl shadow-sm hover:shadow-md transition-shadow"
+            data-ocid="admin.analytics.card"
+          >
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${card.bg}`}
+                >
+                  <card.icon
+                    className={`w-4.5 h-4.5 ${card.color}`}
+                    size={18}
+                  />
+                </div>
+              </div>
+              <div className={`text-2xl font-bold ${card.color} leading-none`}>
+                {card.value}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1.5 font-medium">
+                {card.label}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Most ordered salads */}
+      <Card className="border border-border rounded-2xl shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Leaf className="w-4 h-4 text-primary" />
+            Most Ordered Salads
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {topSalads.length === 0 ? (
+            <div
+              className="py-10 text-center text-muted-foreground"
+              data-ocid="admin.analytics.empty_state"
+            >
+              <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">
+                No orders yet — salad rankings will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {topSalads.map(([name, count], idx) => (
+                <div
+                  key={name}
+                  className="flex items-center gap-3"
+                  data-ocid={`admin.analytics.item.${idx + 1}`}
+                >
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      idx === 0
+                        ? "bg-amber-100 text-amber-700"
+                        : idx === 1
+                          ? "bg-slate-100 text-slate-600"
+                          : idx === 2
+                            ? "bg-orange-100 text-orange-600"
+                            : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="text-sm font-medium w-36 shrink-0 truncate">
+                    {name}
+                  </span>
+                  <div className="flex-1 relative h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full bg-primary/30"
+                      style={{ width: `${(count / maxCount) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-semibold text-muted-foreground w-12 text-right shrink-0">
+                    {count} orders
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Orders Tab ──────────────────────────────────────────────────────────────
+function OrdersTab() {
+  const { actor, isFetching } = useActor();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    actor
+      .getAllOrders()
+      .then(setOrders)
+      .catch(() => toast.error("Failed to load orders"))
+      .finally(() => setLoading(false));
+  }, [actor, isFetching]);
+
+  const handleStatusChange = async (orderId: bigint, status: OrderStatus) => {
+    if (!actor) return;
+    setUpdating(orderId);
+    try {
+      await actor.updateOrderStatus(orderId, status);
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status } : o)),
+      );
+      toast.success("Order status updated");
+    } catch {
+      toast.error("Failed to update order status");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3" data-ocid="admin.orders.loading_state">
+        {[1, 2, 3].map((n) => (
+          <Skeleton key={n} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div
+        className="text-center py-16 text-muted-foreground"
+        data-ocid="admin.orders.empty_state"
+      >
+        <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p className="font-medium">No orders yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto rounded-xl border border-border"
+      data-ocid="admin.orders.table"
+    >
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead className="font-semibold">Order ID</TableHead>
+            <TableHead className="font-semibold">User</TableHead>
+            <TableHead className="font-semibold">Date</TableHead>
+            <TableHead className="font-semibold">Items</TableHead>
+            <TableHead className="font-semibold">Total</TableHead>
+            <TableHead className="font-semibold">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((order, i) => (
+            <TableRow
+              key={Number(order.id)}
+              data-ocid={`admin.orders.item.${i + 1}`}
+            >
+              <TableCell className="font-mono text-xs font-semibold text-primary">
+                #{Number(order.id)}
+              </TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {truncatePrincipal(order.user)}
+              </TableCell>
+              <TableCell className="text-xs">
+                {formatDate(order.createdAt)}
+              </TableCell>
+              <TableCell className="text-xs max-w-[160px]">
+                {order.items
+                  .map((item) => `${item.saladName} ×${Number(item.quantity)}`)
+                  .join(", ")}
+              </TableCell>
+              <TableCell className="font-semibold text-sm">
+                ₹{Number(order.totalAmount)}
+              </TableCell>
+              <TableCell>
+                <Select
+                  value={order.status}
+                  onValueChange={(v) =>
+                    handleStatusChange(order.id, v as OrderStatus)
+                  }
+                  disabled={updating === order.id}
+                >
+                  <SelectTrigger
+                    className="h-8 w-[130px] text-xs"
+                    data-ocid={`admin.orders.select.${i + 1}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={OrderStatus.pending}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                        Pending
+                      </span>
+                    </SelectItem>
+                    <SelectItem value={OrderStatus.confirmed}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        Confirmed
+                      </span>
+                    </SelectItem>
+                    <SelectItem value={OrderStatus.delivered}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        Delivered
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Users Tab ───────────────────────────────────────────────────────────────
+
+type UserRecord = {
+  principal: { toString(): string };
+  profile: {
+    name: string;
+    mobile: string;
+    email: string;
+    address: string;
+    age: [] | [number];
+    heightCm: [] | [number];
+    weightKg: [] | [number];
+    dietaryPreferences: string[];
+    dietaryRestrictions: string[];
+  };
+};
+
+type UserMeta = {
+  isVip: boolean;
+  notes: Array<{ id: bigint; text: string; createdAt: bigint }>;
+};
+
+type UserStats = {
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderDate: bigint | null;
+  hasSubscription: boolean;
+  favoriteSalad: string | null;
+};
+
+function computeUserStats(
+  principalStr: string,
+  orders: Order[],
+  subscriptions: Subscription[],
+): UserStats {
+  const userOrders = orders.filter((o) => o.user.toString() === principalStr);
+  const totalOrders = userOrders.length;
+  const totalSpent = userOrders.reduce(
+    (sum, o) => sum + Number(o.totalAmount),
+    0,
+  );
+  const lastOrderDate =
+    userOrders.length > 0
+      ? userOrders.reduce(
+          (max, o) => (o.createdAt > max ? o.createdAt : max),
+          userOrders[0].createdAt,
+        )
+      : null;
+  const hasSub = subscriptions.some(
+    (s) =>
+      s.user.toString() === principalStr &&
+      s.status === Variant_active_expired.active,
+  );
+
+  // Favorite salad
+  const saladCount: Record<string, number> = {};
+  for (const o of userOrders) {
+    for (const item of o.items) {
+      saladCount[item.saladName] =
+        (saladCount[item.saladName] || 0) + Number(item.quantity);
+    }
+  }
+  const favoriteSalad =
+    Object.keys(saladCount).length > 0
+      ? Object.entries(saladCount).sort((a, b) => b[1] - a[1])[0][0]
+      : null;
+
+  return {
+    totalOrders,
+    totalSpent,
+    lastOrderDate,
+    hasSubscription: hasSub,
+    favoriteSalad,
+  };
+}
+
+function formatDateReadable(ts: bigint) {
+  return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function daysSince(ts: bigint) {
+  return Math.floor(
+    (Date.now() - Number(ts) / 1_000_000) / (1000 * 60 * 60 * 24),
+  );
+}
+
+function calcBmi(weightKg: number, heightCm: number) {
+  if (heightCm === 0) return null;
+  const h = heightCm / 100;
+  return weightKg / (h * h);
+}
+
+function bmiCategory(bmi: number) {
+  if (bmi < 18.5) return { label: "Underweight", color: "text-blue-500" };
+  if (bmi < 25) return { label: "Normal", color: "text-green-600" };
+  if (bmi < 30) return { label: "Overweight", color: "text-yellow-600" };
+  return { label: "Obese", color: "text-red-500" };
+}
+
+// ─── User Detail Sheet ───────────────────────────────────────────────────────
+function UserDetailSheet({
+  user,
+  stats,
+  orders,
+  subscriptions,
+  onClose,
+  onDeleted,
+  onUpdated,
+}: {
+  user: UserRecord;
+  stats: UserStats;
+  orders: Order[];
+  subscriptions: Subscription[];
+  onClose: () => void;
+  onDeleted: (p: string) => void;
+  onUpdated: (p: string, profile: UserRecord["profile"]) => void;
+}) {
+  const { actor } = useActor();
+  const [meta, setMeta] = useState<UserMeta | null>(null);
+  const [metaLoading, setMetaLoading] = useState(true);
+  const [noteText, setNoteText] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
+  const [deletingNote, setDeletingNote] = useState<bigint | null>(null);
+  const [vipLoading, setVipLoading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    ...user.profile,
+    age: user.profile.age[0] ?? "",
+    heightCm: user.profile.heightCm[0] ?? "",
+    weightKg: user.profile.weightKg[0] ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const principalStr = user.principal.toString();
+  const userOrders = orders.filter((o) => o.user.toString() === principalStr);
+  const userSub = subscriptions.find(
+    (s) =>
+      s.user.toString() === principalStr &&
+      s.status === Variant_active_expired.active,
+  );
+
+  useEffect(() => {
+    if (!actor) return;
+    actor
+      .getUserMeta(user.principal as any)
+      .then((m: any) => setMeta(m as UserMeta))
+      .catch(() => setMeta({ isVip: false, notes: [] }))
+      .finally(() => setMetaLoading(false));
+  }, [actor, user.principal]);
+
+  const toggleVip = async () => {
+    if (!actor || !meta) return;
+    setVipLoading(true);
+    try {
+      await actor.setUserVip(user.principal as any, !meta.isVip);
+      setMeta({ ...meta, isVip: !meta.isVip });
+      toast.success(meta.isVip ? "VIP status removed" : "Marked as VIP ⭐");
+    } catch {
+      toast.error("Failed to update VIP status");
+    } finally {
+      setVipLoading(false);
+    }
+  };
+
+  const addNote = async () => {
+    if (!actor || !noteText.trim()) return;
+    setAddingNote(true);
+    try {
+      const id = await actor.addUserNote(
+        user.principal as any,
+        noteText.trim(),
+      );
+      const newNote = {
+        id: id as bigint,
+        text: noteText.trim(),
+        createdAt: BigInt(Date.now() * 1_000_000),
+      };
+      setMeta((prev) =>
+        prev ? { ...prev, notes: [...prev.notes, newNote] } : prev,
+      );
+      setNoteText("");
+      toast.success("Note added");
+    } catch {
+      toast.error("Failed to add note");
+    } finally {
+      setAddingNote(false);
+    }
+  };
+
+  const deleteNote = async (noteId: bigint) => {
+    if (!actor) return;
+    setDeletingNote(noteId);
+    try {
+      await actor.deleteUserNote(user.principal as any, noteId);
+      setMeta((prev) =>
+        prev
+          ? { ...prev, notes: prev.notes.filter((n) => n.id !== noteId) }
+          : prev,
+      );
+      toast.success("Note deleted");
+    } catch {
+      toast.error("Failed to delete note");
+    } finally {
+      setDeletingNote(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!actor) return;
+    setDeleting(true);
+    try {
+      await actor.deleteUser(user.principal as any);
+      toast.success("User deleted");
+      onDeleted(principalStr);
+      onClose();
+    } catch {
+      toast.error("Failed to delete user");
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!actor) return;
+    setSaving(true);
+    try {
+      const profile = {
+        name: editForm.name,
+        mobile: editForm.mobile,
+        email: editForm.email,
+        address: editForm.address,
+        age: editForm.age !== "" ? [Number(editForm.age)] : [],
+        heightCm: editForm.heightCm !== "" ? [Number(editForm.heightCm)] : [],
+        weightKg: editForm.weightKg !== "" ? [Number(editForm.weightKg)] : [],
+        dietaryPreferences: user.profile.dietaryPreferences,
+        dietaryRestrictions: user.profile.dietaryRestrictions,
+      };
+      await actor.updateUserProfileByAdmin(
+        user.principal as any,
+        profile as any,
+      );
+      onUpdated(principalStr, profile as UserRecord["profile"]);
+      toast.success("Profile updated");
+      setEditOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const weight =
+    editForm.weightKg !== ""
+      ? Number(editForm.weightKg)
+      : (user.profile.weightKg[0] ?? 0);
+  const height =
+    editForm.heightCm !== ""
+      ? Number(editForm.heightCm)
+      : (user.profile.heightCm[0] ?? 0);
+  const bmi = weight && height ? calcBmi(weight, height) : null;
+  const bmiCat = bmi ? bmiCategory(bmi) : null;
+
+  const avgOrder =
+    stats.totalOrders > 0
+      ? Math.round(stats.totalSpent / stats.totalOrders)
+      : 0;
+
+  const getSubExpiry = () => {
+    if (!userSub) return null;
+    const days = userSub.planType === Variant_monthly_weekly.monthly ? 30 : 7;
+    const expiry =
+      Number(userSub.startDate) / 1_000_000 + days * 24 * 60 * 60 * 1000;
+    return new Date(expiry).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <>
+      <SheetHeader className="pb-4 border-b border-border">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+              {(user.profile.name || "?")[0].toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <SheetTitle className="text-lg">
+                  {user.profile.name || "Unknown"}
+                </SheetTitle>
+                {meta?.isVip && (
+                  <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">
+                    ⭐ VIP
+                  </Badge>
+                )}
+                {stats.lastOrderDate && daysSince(stats.lastOrderDate) >= 7 && (
+                  <Badge
+                    variant="outline"
+                    className="text-amber-600 border-amber-300 text-xs"
+                  >
+                    Inactive
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {user.profile.mobile}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant={meta?.isVip ? "default" : "outline"}
+            className={
+              meta?.isVip
+                ? "bg-yellow-400 hover:bg-yellow-500 text-yellow-900"
+                : ""
+            }
+            onClick={toggleVip}
+            disabled={vipLoading || metaLoading}
+            data-ocid="user.detail.toggle"
+          >
+            <Star
+              className={`w-4 h-4 ${meta?.isVip ? "fill-yellow-900" : ""}`}
+            />
+          </Button>
+        </div>
+      </SheetHeader>
+
+      <ScrollArea className="flex-1 overflow-y-auto">
+        <div className="space-y-5 py-4">
+          {/* Profile */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Email</span>
+                <p className="font-medium truncate">
+                  {user.profile.email || "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Address</span>
+                <p className="font-medium">{user.profile.address || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Age</span>
+                <p className="font-medium">{user.profile.age[0] ?? "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Height</span>
+                <p className="font-medium">
+                  {user.profile.heightCm[0]
+                    ? `${user.profile.heightCm[0]} cm`
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Weight</span>
+                <p className="font-medium">
+                  {user.profile.weightKg[0]
+                    ? `${user.profile.weightKg[0]} kg`
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">BMI</span>
+                {bmi ? (
+                  <p className={`font-medium ${bmiCat?.color}`}>
+                    {bmi.toFixed(1)} — {bmiCat?.label}
+                  </p>
+                ) : (
+                  <p className="font-medium">—</p>
+                )}
+              </div>
+              {stats.lastOrderDate && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Last Active</span>
+                  <p className="font-medium">
+                    {formatDateReadable(stats.lastOrderDate)} (
+                    {daysSince(stats.lastOrderDate)} days ago)
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Insights */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Insights
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-primary/5 rounded-lg p-3">
+                <p className="text-muted-foreground text-xs">Total Orders</p>
+                <p className="text-2xl font-bold text-primary">
+                  {stats.totalOrders}
+                </p>
+              </div>
+              <div className="bg-primary/5 rounded-lg p-3">
+                <p className="text-muted-foreground text-xs">Total Spent</p>
+                <p className="text-2xl font-bold text-primary">
+                  ₹{stats.totalSpent.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3">
+                <p className="text-muted-foreground text-xs">Avg Order</p>
+                <p className="text-xl font-semibold">₹{avgOrder}</p>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3">
+                <p className="text-muted-foreground text-xs">Favorite Salad</p>
+                <p className="text-sm font-semibold truncate">
+                  {stats.favoriteSalad || "—"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Subscription */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Subscription
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 text-sm">
+              {userSub ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan</span>
+                    <Badge className="bg-primary/10 text-primary border-primary/20 capitalize">
+                      {userSub.planType === Variant_monthly_weekly.monthly
+                        ? "Monthly"
+                        : "Weekly"}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Remaining Meals
+                    </span>
+                    <span className="font-medium">
+                      {String(userSub.saladsRemaining)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expiry</span>
+                    <span className="font-medium">{getSubExpiry()}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No active subscription</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Order History */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Order History ({userOrders.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {userOrders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No orders yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {userOrders
+                    .slice()
+                    .sort((a, b) => Number(b.createdAt - a.createdAt))
+                    .map((order) => {
+                      const statusColors: Record<string, string> = {
+                        pending: "bg-yellow-100 text-yellow-700",
+                        confirmed: "bg-blue-100 text-blue-700",
+                        preparing: "bg-orange-100 text-orange-700",
+                        ready: "bg-purple-100 text-purple-700",
+                        delivered: "bg-green-100 text-green-700",
+                        cancelled: "bg-red-100 text-red-700",
+                      };
+                      const statusStr =
+                        typeof order.status === "string"
+                          ? order.status
+                          : Object.keys(order.status)[0];
+                      return (
+                        <div
+                          key={String(order.id)}
+                          className="border border-border/60 rounded-lg p-3 text-sm"
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-medium text-xs text-muted-foreground">
+                              #{String(order.id)}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColors[statusStr] || "bg-muted text-muted-foreground"}`}
+                            >
+                              {statusStr}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {formatDateReadable(order.createdAt)}
+                          </p>
+                          <p className="text-xs">
+                            {order.items
+                              .map((i) => `${i.saladName} ×${i.quantity}`)
+                              .join(", ")}
+                          </p>
+                          <p className="font-semibold text-primary mt-1">
+                            ₹{Number(order.totalAmount).toLocaleString()}
+                          </p>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Notes */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Admin Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              {metaLoading ? (
+                <Skeleton className="h-8 w-full" />
+              ) : (
+                <>
+                  {meta?.notes.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No notes yet
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {meta?.notes.map((note) => (
+                      <div
+                        key={String(note.id)}
+                        className="flex items-start justify-between gap-2 bg-muted/40 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <span>{note.text}</span>
+                        <button
+                          type="button"
+                          onClick={() => deleteNote(note.id)}
+                          disabled={deletingNote === note.id}
+                          className="text-muted-foreground hover:text-destructive flex-shrink-0"
+                          data-ocid="user.notes.delete_button"
+                        >
+                          {deletingNote === note.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      placeholder="e.g. Prefers high protein, Gym regular"
+                      className="text-sm"
+                      onKeyDown={(e) => e.key === "Enter" && addNote()}
+                      data-ocid="user.notes.input"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={addNote}
+                      disabled={addingNote || !noteText.trim()}
+                      data-ocid="user.notes.submit_button"
+                    >
+                      {addingNote ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Add"
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className="gap-2 border-green-300 text-green-700 hover:bg-green-50"
+              onClick={() =>
+                window.open(
+                  `https://wa.me/91${user.profile.mobile}?text=Hi%20${encodeURIComponent(user.profile.name)}%2C%20this%20is%20Salad%20Khatora%20team!`,
+                  "_blank",
+                )
+              }
+              data-ocid="user.whatsapp.button"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 fill-green-600"
+                role="img"
+                aria-label="WhatsApp"
+              >
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-primary/30 text-primary hover:bg-primary/5"
+              onClick={() => toast.info("Discount feature coming soon")}
+              data-ocid="user.discount.button"
+            >
+              <Tag className="w-4 h-4" />
+              Offer Discount
+            </Button>
+          </div>
+
+          {/* Admin Actions */}
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setEditOpen(true)}
+              data-ocid="user.edit.button"
+            >
+              <Pencil className="w-4 h-4" />
+              Edit Profile
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => setDeleteOpen(true)}
+              data-ocid="user.delete.button"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete User
+            </Button>
+          </div>
+        </div>
+      </ScrollArea>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-sm" data-ocid="user.edit.dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {(["name", "mobile", "email", "address"] as const).map((field) => (
+              <div key={field}>
+                <Label className="capitalize text-xs">{field}</Label>
+                <Input
+                  value={editForm[field] as string}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      [field]: e.target.value,
+                    }))
+                  }
+                  data-ocid={`user.edit.${field}.input` as any}
+                />
+              </div>
+            ))}
+            <div className="grid grid-cols-3 gap-2">
+              {(["age", "heightCm", "weightKg"] as const).map((field) => (
+                <div key={field}>
+                  <Label className="text-xs capitalize">
+                    {field === "heightCm"
+                      ? "Height (cm)"
+                      : field === "weightKg"
+                        ? "Weight (kg)"
+                        : "Age"}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={editForm[field] as string | number}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        [field]: e.target.value,
+                      }))
+                    }
+                    data-ocid={`user.edit.${field}.input` as any}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditOpen(false)}
+              data-ocid="user.edit.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={saving}
+              data-ocid="user.edit.save_button"
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent data-ocid="user.delete.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {user.profile.name || "this user"}{" "}
+              and all their data. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="user.delete.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive hover:bg-destructive/90"
+              data-ocid="user.delete.confirm_button"
+            >
+              {deleting ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+// ─── Main Users Tab ───────────────────────────────────────────────────────────
+function UsersTab() {
+  const { actor, isFetching } = useActor();
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<
+    "all" | "active" | "inactive" | "subscribers"
+  >("all");
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    Promise.all([
+      actor.getAllUsers() as unknown as Promise<UserRecord[]>,
+      actor.getAllOrders() as Promise<Order[]>,
+      actor.getAllSubscriptions() as Promise<Subscription[]>,
+    ])
+      .then(([u, o, s]) => {
+        setUsers(u);
+        setOrders(o);
+        setSubscriptions(s);
+      })
+      .catch(() => toast.error("Failed to load users"))
+      .finally(() => setLoading(false));
+  }, [actor, isFetching]);
+
+  const statsMap = useMemo(() => {
+    const map: Record<string, UserStats> = {};
+    for (const u of users) {
+      map[u.principal.toString()] = computeUserStats(
+        u.principal.toString(),
+        orders,
+        subscriptions,
+      );
+    }
+    return map;
+  }, [users, orders, subscriptions]);
+
+  const filtered = useMemo(() => {
+    return users.filter((u) => {
+      const s = search.toLowerCase();
+      const matchSearch =
+        !s ||
+        u.profile.name.toLowerCase().includes(s) ||
+        u.profile.mobile.toLowerCase().includes(s);
+
+      const stats = statsMap[u.principal.toString()];
+      const matchFilter =
+        filter === "all" ||
+        (filter === "active" &&
+          stats.lastOrderDate !== null &&
+          daysSince(stats.lastOrderDate) < 7) ||
+        (filter === "inactive" &&
+          (stats.lastOrderDate === null ||
+            daysSince(stats.lastOrderDate) >= 7)) ||
+        (filter === "subscribers" && stats.hasSubscription);
+
+      return matchSearch && matchFilter;
+    });
+  }, [users, search, filter, statsMap]);
+
+  const handleDeleted = (p: string) =>
+    setUsers((prev) => prev.filter((u) => u.principal.toString() !== p));
+  const handleUpdated = (p: string, profile: UserRecord["profile"]) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.principal.toString() === p ? { ...u, profile } : u)),
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3" data-ocid="admin.users.loading_state">
+        {[1, 2, 3].map((n) => (
+          <Skeleton key={n} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Search + Filter */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or mobile..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-ocid="admin.users.search_input"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {(["all", "active", "inactive", "subscribers"] as const).map((f) => (
+            <button
+              type="button"
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+              data-ocid={`admin.users.${f}.tab`}
+            >
+              {f === "all"
+                ? `All (${users.length})`
+                : f === "active"
+                  ? "Active"
+                  : f === "inactive"
+                    ? "Inactive"
+                    : "Subscribers"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Users List */}
+      {filtered.length === 0 ? (
+        <div
+          className="text-center py-16 text-muted-foreground"
+          data-ocid="admin.users.empty_state"
+        >
+          <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p className="font-medium">No users found</p>
+        </div>
+      ) : (
+        <div className="space-y-2" data-ocid="admin.users.list">
+          {filtered.map((u, i) => {
+            const stats = statsMap[u.principal.toString()];
+            const isInactive =
+              stats.lastOrderDate === null ||
+              daysSince(stats.lastOrderDate) >= 7;
+            return (
+              <button
+                type="button"
+                key={u.principal.toString()}
+                onClick={() => setSelectedUser(u)}
+                className="w-full text-left border border-border/60 rounded-xl p-4 hover:bg-muted/30 transition-colors"
+                data-ocid={`admin.users.item.${i + 1}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">
+                      {(u.profile.name || "?")[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm truncate">
+                          {u.profile.name || "—"}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {u.profile.mobile || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {stats.hasSubscription && (
+                      <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">
+                        Sub
+                      </Badge>
+                    )}
+                    {isInactive && stats.totalOrders > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-amber-600 border-amber-300 text-xs"
+                      >
+                        Inactive
+                      </Badge>
+                    )}
+                    <div className="text-right">
+                      <p className="text-xs font-semibold text-primary">
+                        {stats.totalOrders} orders
+                      </p>
+                      {stats.lastOrderDate && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateReadable(stats.lastOrderDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* User Detail Sheet */}
+      <Sheet
+        open={!!selectedUser}
+        onOpenChange={(open) => !open && setSelectedUser(null)}
+      >
+        <SheetContent
+          className="w-full sm:max-w-md flex flex-col p-4 gap-0"
+          data-ocid="user.detail.panel"
+        >
+          {selectedUser && (
+            <UserDetailSheet
+              user={selectedUser}
+              stats={statsMap[selectedUser.principal.toString()]}
+              orders={orders}
+              subscriptions={subscriptions}
+              onClose={() => setSelectedUser(null)}
+              onDeleted={handleDeleted}
+              onUpdated={handleUpdated}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ─── Subscriptions Tab ───────────────────────────────────────────────────────
+function SubscriptionsTab() {
+  const { actor, isFetching } = useActor();
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    actor
+      .getAllSubscriptions()
+      .then(setSubs)
+      .catch(() => toast.error("Failed to load subscriptions"))
+      .finally(() => setLoading(false));
+  }, [actor, isFetching]);
+
+  const toggleStatus = async (sub: Subscription) => {
+    if (!actor) return;
+    const key = sub.user.toString();
+    setUpdating(key);
+    const newStatus =
+      sub.status === Variant_active_expired.active
+        ? Variant_active_expired.expired
+        : Variant_active_expired.active;
+    try {
+      await actor.updateSubscriptionStatus(sub.user, newStatus);
+      setSubs((prev) =>
+        prev.map((s) =>
+          s.user.toString() === key ? { ...s, status: newStatus } : s,
+        ),
+      );
+      toast.success("Subscription status updated");
+    } catch {
+      toast.error("Failed to update subscription");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3" data-ocid="admin.subs.loading_state">
+        {[1, 2].map((n) => (
+          <Skeleton key={n} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (subs.length === 0) {
+    return (
+      <div
+        className="text-center py-16 text-muted-foreground"
+        data-ocid="admin.subs.empty_state"
+      >
+        <p className="font-medium">No subscriptions found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto rounded-xl border border-border"
+      data-ocid="admin.subs.table"
+    >
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead className="font-semibold">User</TableHead>
+            <TableHead className="font-semibold">Plan</TableHead>
+            <TableHead className="font-semibold">Started</TableHead>
+            <TableHead className="font-semibold">Salads Left</TableHead>
+            <TableHead className="font-semibold">Status</TableHead>
+            <TableHead />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {subs.map((sub, i) => (
+            <TableRow
+              key={sub.user.toString()}
+              data-ocid={`admin.subs.item.${i + 1}`}
+            >
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {truncatePrincipal(sub.user)}
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant="outline"
+                  className="text-xs capitalize border-primary/30 text-primary"
+                >
+                  {sub.planType === Variant_monthly_weekly.monthly
+                    ? "Monthly"
+                    : "Weekly"}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-xs">
+                {formatDate(sub.startDate)}
+              </TableCell>
+              <TableCell className="font-semibold text-center">
+                {Number(sub.saladsRemaining)}
+              </TableCell>
+              <TableCell>
+                <Badge
+                  className={`text-xs ${
+                    sub.status === Variant_active_expired.active
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {sub.status === Variant_active_expired.active
+                    ? "Active"
+                    : "Expired"}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7 rounded-full"
+                  onClick={() => toggleStatus(sub)}
+                  disabled={updating === sub.user.toString()}
+                  data-ocid={`admin.subs.toggle.${i + 1}`}
+                >
+                  {updating === sub.user.toString() ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : sub.status === Variant_active_expired.active ? (
+                    "Expire"
+                  ) : (
+                    "Activate"
+                  )}
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Inventory Tab ───────────────────────────────────────────────────────────
+function InventoryTab() {
+  const { actor, isFetching } = useActor();
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [lowStock, setLowStock] = useState<Ingredient[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Add ingredient form
+  const [addName, setAddName] = useState("");
+  const [addUnit, setAddUnit] = useState("");
+  const [addQty, setAddQty] = useState("");
+  const [addThreshold, setAddThreshold] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+
+  // Update stock form
+  const [updateId, setUpdateId] = useState("");
+  const [updateQty, setUpdateQty] = useState("");
+  const [updateLoading, setUpdateLoading] = useState(false);
+
+  // Link ingredient form
+  const [linkIngId, setLinkIngId] = useState("");
+  const [linkMenuItem, setLinkMenuItem] = useState("");
+  const [linkQtyPerOrder, setLinkQtyPerOrder] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
+
+  const refreshInventory = async () => {
+    if (!actor) return;
+    const [all, low] = await Promise.all([
+      actor.getAllIngredients(),
+      actor.getLowStockIngredients(),
+    ]);
+    setIngredients(all);
+    setLowStock(low);
+  };
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    (async () => {
+      try {
+        const [all, low] = await Promise.all([
+          actor.getAllIngredients(),
+          actor.getLowStockIngredients(),
+        ]);
+        setIngredients(all);
+        setLowStock(low);
+      } catch {
+        toast.error("Failed to load inventory");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [actor, isFetching]);
+
+  const handleAddIngredient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !addName || !addUnit || !addQty || !addThreshold) return;
+    setAddLoading(true);
+    try {
+      await actor.addIngredient(
+        addName,
+        addUnit,
+        BigInt(Number(addQty)),
+        BigInt(Number(addThreshold)),
+      );
+      setAddName("");
+      setAddUnit("");
+      setAddQty("");
+      setAddThreshold("");
+      await refreshInventory();
+      toast.success("Ingredient added");
+    } catch {
+      toast.error("Failed to add ingredient");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleUpdateStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !updateId || !updateQty) return;
+    setUpdateLoading(true);
+    try {
+      await actor.updateIngredientStock(
+        BigInt(Number(updateId)),
+        BigInt(Number(updateQty)),
+      );
+      setUpdateId("");
+      setUpdateQty("");
+      await refreshInventory();
+      toast.success("Stock updated");
+    } catch {
+      toast.error("Failed to update stock");
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  const handleLinkIngredient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !linkIngId || !linkMenuItem || !linkQtyPerOrder) return;
+    setLinkLoading(true);
+    try {
+      await actor.linkIngredientToMenuItem(
+        linkMenuItem,
+        BigInt(Number(linkIngId)),
+        BigInt(Number(linkQtyPerOrder)),
+      );
+      setLinkIngId("");
+      setLinkMenuItem("");
+      setLinkQtyPerOrder("");
+      toast.success("Ingredient linked to menu item");
+    } catch {
+      toast.error("Failed to link ingredient");
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3" data-ocid="admin.inventory.loading_state">
+        {[1, 2, 3].map((n) => (
+          <Skeleton key={n} className="h-16 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Low stock alert */}
+      {lowStock.length > 0 && (
+        <div
+          className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4"
+          data-ocid="admin.inventory.error_state"
+        >
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-red-700 text-sm">
+              Low Stock Alert
+            </p>
+            <p className="text-xs text-red-600 mt-0.5">
+              {lowStock.map((i) => i.name).join(", ")} — running low!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Ingredients table */}
+      <div
+        className="rounded-xl border border-border overflow-x-auto"
+        data-ocid="admin.inventory.table"
+      >
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">ID</TableHead>
+              <TableHead className="font-semibold">Name</TableHead>
+              <TableHead className="font-semibold">Unit</TableHead>
+              <TableHead className="font-semibold">Stock</TableHead>
+              <TableHead className="font-semibold">Threshold</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {ingredients.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-muted-foreground py-8"
+                  data-ocid="admin.inventory.empty_state"
+                >
+                  No ingredients added yet
+                </TableCell>
+              </TableRow>
+            ) : (
+              ingredients.map((ing, i) => (
+                <TableRow
+                  key={Number(ing.id)}
+                  data-ocid={`admin.inventory.item.${i + 1}`}
+                >
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {Number(ing.id)}
+                  </TableCell>
+                  <TableCell className="font-medium">{ing.name}</TableCell>
+                  <TableCell className="text-xs capitalize">
+                    {ing.unit}
+                  </TableCell>
+                  <TableCell className="font-semibold">
+                    {Number(ing.quantityInStock)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {Number(ing.lowStockThreshold)}
+                  </TableCell>
+                  <TableCell>
+                    {Number(ing.quantityInStock) <=
+                      Number(ing.lowStockThreshold) && (
+                      <Badge className="bg-red-100 text-red-700 text-xs">
+                        Low Stock
+                      </Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Action forms */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Add ingredient */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold">Add Ingredient</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddIngredient} className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Name</Label>
+                <Input
+                  placeholder="e.g. Lettuce"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  className="h-8 text-sm"
+                  data-ocid="admin.inventory.input"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Unit</Label>
+                <Input
+                  placeholder="e.g. grams"
+                  value={addUnit}
+                  onChange={(e) => setAddUnit(e.target.value)}
+                  className="h-8 text-sm"
+                  data-ocid="admin.inventory.input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Stock Qty</Label>
+                  <Input
+                    type="number"
+                    placeholder="500"
+                    value={addQty}
+                    onChange={(e) => setAddQty(e.target.value)}
+                    className="h-8 text-sm"
+                    min="0"
+                    data-ocid="admin.inventory.input"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Low Threshold</Label>
+                  <Input
+                    type="number"
+                    placeholder="50"
+                    value={addThreshold}
+                    onChange={(e) => setAddThreshold(e.target.value)}
+                    className="h-8 text-sm"
+                    min="0"
+                    data-ocid="admin.inventory.input"
+                  />
+                </div>
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full rounded-lg bg-primary text-white hover:bg-primary/90"
+                disabled={addLoading}
+                data-ocid="admin.inventory.submit_button"
+              >
+                {addLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                ) : null}
+                Add Ingredient
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Update stock */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold">Update Stock</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateStock} className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Select Ingredient</Label>
+                <Select value={updateId} onValueChange={setUpdateId}>
+                  <SelectTrigger
+                    className="h-8 text-sm"
+                    data-ocid="admin.inventory.select"
+                  >
+                    <SelectValue placeholder="Choose ingredient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ingredients.map((ing) => (
+                      <SelectItem
+                        key={Number(ing.id)}
+                        value={String(Number(ing.id))}
+                      >
+                        {ing.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">New Quantity</Label>
+                <Input
+                  type="number"
+                  placeholder="Enter new quantity"
+                  value={updateQty}
+                  onChange={(e) => setUpdateQty(e.target.value)}
+                  className="h-8 text-sm"
+                  min="0"
+                  data-ocid="admin.inventory.input"
+                />
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                className="w-full rounded-lg border-primary text-primary hover:bg-accent"
+                disabled={updateLoading}
+                data-ocid="admin.inventory.submit_button"
+              >
+                {updateLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                ) : null}
+                Update Stock
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Link to menu item */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold">
+              Link to Menu Item
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLinkIngredient} className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Ingredient</Label>
+                <Select value={linkIngId} onValueChange={setLinkIngId}>
+                  <SelectTrigger
+                    className="h-8 text-sm"
+                    data-ocid="admin.inventory.select"
+                  >
+                    <SelectValue placeholder="Select ingredient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ingredients.map((ing) => (
+                      <SelectItem
+                        key={Number(ing.id)}
+                        value={String(Number(ing.id))}
+                      >
+                        {ing.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Menu Item</Label>
+                <Select value={linkMenuItem} onValueChange={setLinkMenuItem}>
+                  <SelectTrigger
+                    className="h-8 text-sm"
+                    data-ocid="admin.inventory.select"
+                  >
+                    <SelectValue placeholder="Select salad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MENU_ITEMS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Qty per Order</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 100"
+                  value={linkQtyPerOrder}
+                  onChange={(e) => setLinkQtyPerOrder(e.target.value)}
+                  className="h-8 text-sm"
+                  min="1"
+                  data-ocid="admin.inventory.input"
+                />
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                className="w-full rounded-lg border-primary text-primary hover:bg-accent"
+                disabled={linkLoading}
+                data-ocid="admin.inventory.submit_button"
+              >
+                {linkLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                ) : null}
+                Link Ingredient
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── Menu Management Tab ─────────────────────────────────────────────────────
+const EMPTY_FORM = {
+  name: "",
+  price: "",
+  calories: "",
+  protein: "",
+  ingredients: "",
+  tags: [] as string[],
+};
+
+function MenuManagementTab() {
+  const { actor, isFetching } = useActor();
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    actor
+      .getAllMenuItems()
+      .then((data) => setItems(data))
+      .catch(() => toast.error("Failed to load menu items"))
+      .finally(() => setLoading(false));
+  }, [actor, isFetching]);
+
+  function openAdd() {
+    setEditingItem(null);
+    setForm(EMPTY_FORM);
+    setShowForm(true);
+  }
+
+  function openEdit(item: MenuItem) {
+    setEditingItem(item);
+    setForm({
+      name: item.name,
+      price: item.price.toString(),
+      calories: item.calories.toString(),
+      protein: item.protein.toString(),
+      ingredients: item.ingredients.join(", "),
+      tags: item.tags ?? [],
+    });
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingItem(null);
+    setForm(EMPTY_FORM);
+  }
+
+  async function handleSave() {
+    if (!actor) return;
+    const name = form.name.trim();
+    if (!name) {
+      toast.error("Name is required");
+      return;
+    }
+    const price = BigInt(Math.max(0, Number.parseInt(form.price) || 0));
+    const calories = BigInt(Math.max(0, Number.parseInt(form.calories) || 0));
+    const protein = BigInt(Math.max(0, Number.parseInt(form.protein) || 0));
+    const ingredients = form.ingredients
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setSaving(true);
+    try {
+      if (editingItem) {
+        await actor.updateMenuItem(
+          editingItem.id,
+          name,
+          price,
+          calories,
+          protein,
+          ingredients,
+          form.tags,
+        );
+        setItems((prev) =>
+          prev.map((i) =>
+            i.id === editingItem.id
+              ? {
+                  ...i,
+                  name,
+                  price,
+                  calories,
+                  protein,
+                  ingredients,
+                  tags: form.tags,
+                }
+              : i,
+          ),
+        );
+        toast.success("Salad updated");
+      } else {
+        const newId = await actor.addMenuItem(
+          name,
+          price,
+          calories,
+          protein,
+          ingredients,
+          form.tags,
+        );
+        setItems((prev) => [
+          ...prev,
+          {
+            id: newId,
+            name,
+            price,
+            calories,
+            protein,
+            ingredients,
+            tags: form.tags,
+            enabled: true,
+          },
+        ]);
+        toast.success("Salad added");
+      }
+      closeForm();
+    } catch (e) {
+      toast.error(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: bigint) {
+    if (!actor) return;
+    try {
+      await actor.deleteMenuItem(id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      toast.success("Salad deleted");
+    } catch {
+      toast.error("Delete failed");
+    } finally {
+      setConfirmDelete(null);
+    }
+  }
+
+  async function handleToggle(item: MenuItem) {
+    if (!actor) return;
+    const newEnabled = !item.enabled;
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, enabled: newEnabled } : i)),
+    );
+    try {
+      await actor.toggleMenuItem(item.id, newEnabled);
+    } catch {
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id ? { ...i, enabled: item.enabled } : i,
+        ),
+      );
+      toast.error("Toggle failed");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">Menu Items</h2>
+        <Button
+          onClick={openAdd}
+          className="bg-primary hover:bg-primary/90 text-white gap-2"
+          data-ocid="menu.open_modal_button"
+        >
+          <Utensils className="w-4 h-4" />
+          Add New Salad
+        </Button>
+      </div>
+
+      {/* Add/Edit Form */}
+      {showForm && (
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              {editingItem ? "Edit Salad" : "Add New Salad"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <Label htmlFor="menu-name" className="text-sm font-medium">
+                  Name
+                </Label>
+                <Input
+                  id="menu-name"
+                  placeholder="e.g. Caesar Salad"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="mt-1"
+                  data-ocid="menu.input"
+                />
+              </div>
+              <div>
+                <Label htmlFor="menu-price" className="text-sm font-medium">
+                  Price (₹)
+                </Label>
+                <Input
+                  id="menu-price"
+                  type="number"
+                  min="0"
+                  placeholder="199"
+                  value={form.price}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, price: e.target.value }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="menu-calories" className="text-sm font-medium">
+                  Calories
+                </Label>
+                <Input
+                  id="menu-calories"
+                  type="number"
+                  min="0"
+                  placeholder="320"
+                  value={form.calories}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, calories: e.target.value }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="menu-protein" className="text-sm font-medium">
+                  Protein (g)
+                </Label>
+                <Input
+                  id="menu-protein"
+                  type="number"
+                  min="0"
+                  placeholder="12"
+                  value={form.protein}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, protein: e.target.value }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label
+                  htmlFor="menu-ingredients"
+                  className="text-sm font-medium"
+                >
+                  Ingredients{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (comma-separated)
+                  </span>
+                </Label>
+                <Input
+                  id="menu-ingredients"
+                  placeholder="e.g. Lettuce, Tomato, Cheese, Croutons"
+                  value={form.ingredients}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, ingredients: e.target.value }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-sm font-medium">Goal Tags</Label>
+                <div className="flex flex-wrap gap-4 mt-2">
+                  {(
+                    [
+                      { value: "weight-loss", label: "Weight Loss" },
+                      { value: "high-protein", label: "High Protein" },
+                      { value: "detox", label: "Detox" },
+                    ] as { value: string; label: string }[]
+                  ).map((tag) => (
+                    <div key={tag.value} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`tag-${tag.value}`}
+                        checked={form.tags.includes(tag.value)}
+                        onCheckedChange={(checked) =>
+                          setForm((p) => ({
+                            ...p,
+                            tags: checked
+                              ? [...p.tags, tag.value]
+                              : p.tags.filter((t) => t !== tag.value),
+                          }))
+                        }
+                        data-ocid="menu.checkbox"
+                      />
+                      <Label
+                        htmlFor={`tag-${tag.value}`}
+                        className="text-sm cursor-pointer"
+                      >
+                        {tag.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-primary hover:bg-primary/90 text-white"
+                data-ocid="menu.submit_button"
+              >
+                {saving && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+                {editingItem ? "Update Salad" : "Add Salad"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={closeForm}
+                data-ocid="menu.cancel_button"
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Items List */}
+      {loading ? (
+        <div className="space-y-2" data-ocid="menu.loading_state">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <Card data-ocid="menu.empty_state">
+          <CardContent className="py-12 text-center">
+            <Utensils className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-muted-foreground">
+              No menu items yet. Add your first salad!
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item, idx) => (
+            <Card
+              key={item.id.toString()}
+              className={`transition-opacity ${item.enabled ? "" : "opacity-60"}`}
+              data-ocid={`menu.item.${idx + 1}`}
+            >
+              <CardContent className="py-3 px-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-foreground">
+                        {item.name}
+                      </span>
+                      <Badge
+                        className={
+                          item.enabled
+                            ? "bg-green-100 text-green-700 border-green-200"
+                            : "bg-gray-100 text-gray-500 border-gray-200"
+                        }
+                      >
+                        {item.enabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
+                      <span className="font-medium text-primary">
+                        ₹{item.price.toString()}
+                      </span>
+                      <span>{item.calories.toString()} kcal</span>
+                      <span>{item.protein.toString()}g protein</span>
+                    </div>
+                    {item.ingredients.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {item.ingredients.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch
+                      checked={item.enabled}
+                      onCheckedChange={() => handleToggle(item)}
+                      data-ocid={`menu.toggle.${idx + 1}`}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEdit(item)}
+                      className="h-8 w-8 p-0"
+                      data-ocid={`menu.edit_button.${idx + 1}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    {confirmDelete === item.id ? (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(item.id)}
+                          className="h-8 px-2 text-xs"
+                          data-ocid={`menu.confirm_button.${idx + 1}`}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmDelete(null)}
+                          className="h-8 px-2 text-xs"
+                          data-ocid={`menu.cancel_button.${idx + 1}`}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setConfirmDelete(item.id)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        data-ocid={`menu.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Leads Tab ───────────────────────────────────────────────────────────────
+function LeadsTab() {
+  const { actor } = useActor();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "today" | "week">("all");
+
+  useEffect(() => {
+    if (!actor) return;
+    actor
+      .getAllLeads()
+      .then((data) => {
+        setLeads(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [actor]);
+
+  function getStatusLabel(status: LeadStatus) {
+    if (status.__kind__ === "new_") return "New";
+    if (status.__kind__ === "contacted") return "Contacted";
+    return "Converted";
+  }
+
+  function getStatusVariant(
+    status: LeadStatus,
+  ): "default" | "secondary" | "outline" {
+    if (status.__kind__ === "new_") return "default";
+    if (status.__kind__ === "contacted") return "secondary";
+    return "outline";
+  }
+
+  function getStatusClass(status: LeadStatus) {
+    if (status.__kind__ === "new_")
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    if (status.__kind__ === "contacted")
+      return "bg-amber-100 text-amber-700 border-amber-200";
+    return "bg-green-100 text-green-700 border-green-200";
+  }
+
+  function filterLeads(leads: Lead[]) {
+    if (filter === "today") {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const startMs = startOfDay.getTime();
+      return leads.filter((l) => Number(l.date) / 1_000_000 >= startMs);
+    }
+    if (filter === "week") {
+      const startOfWeek = new Date();
+      const day = startOfWeek.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      startOfWeek.setDate(startOfWeek.getDate() + diff);
+      startOfWeek.setHours(0, 0, 0, 0);
+      return leads.filter(
+        (l) => Number(l.date) / 1_000_000 >= startOfWeek.getTime(),
+      );
+    }
+    return leads;
+  }
+
+  async function markStatus(id: bigint, kind: "contacted" | "converted") {
+    if (!actor) return;
+    const status: LeadStatus =
+      kind === "contacted"
+        ? { __kind__: "contacted", contacted: null }
+        : { __kind__: "converted", converted: null };
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+    try {
+      await actor.updateLeadStatus(id, status);
+      toast.success(`Lead marked as ${kind}`);
+    } catch {
+      toast.error("Failed to update lead status");
+      actor
+        .getAllLeads()
+        .then(setLeads)
+        .catch(() => {});
+    }
+  }
+
+  const filtered = filterLeads(leads);
+  const total = leads.length;
+  const newCount = leads.filter((l) => l.status.__kind__ === "new_").length;
+  const contactedCount = leads.filter(
+    (l) => l.status.__kind__ === "contacted",
+  ).length;
+  const convertedCount = leads.filter(
+    (l) => l.status.__kind__ === "converted",
+  ).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total", value: total, cls: "text-foreground" },
+          { label: "New", value: newCount, cls: "text-blue-600" },
+          { label: "Contacted", value: contactedCount, cls: "text-amber-600" },
+          { label: "Converted", value: convertedCount, cls: "text-green-600" },
+        ].map((s) => (
+          <Card key={s.label} className="py-3">
+            <CardContent className="px-4 py-0 text-center">
+              <div className={`text-2xl font-bold ${s.cls}`}>{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {s.label}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filter buttons */}
+      <div className="flex gap-2" data-ocid="leads.tab">
+        {(["all", "today", "week"] as const).map((f) => (
+          <Button
+            key={f}
+            size="sm"
+            variant={filter === f ? "default" : "outline"}
+            onClick={() => setFilter(f)}
+            data-ocid={`leads.${f}.button`}
+          >
+            {f === "all" ? "All" : f === "today" ? "Today" : "This Week"}
+          </Button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-4 space-y-3" data-ocid="leads.loading_state">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div
+              className="py-12 text-center text-muted-foreground"
+              data-ocid="leads.empty_state"
+            >
+              No leads found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table data-ocid="leads.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Mobile</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((lead, idx) => (
+                    <TableRow
+                      key={String(lead.id)}
+                      data-ocid={`leads.item.${idx + 1}`}
+                    >
+                      <TableCell className="font-medium">{lead.name}</TableCell>
+                      <TableCell>{lead.mobile}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(
+                          Number(lead.date) / 1_000_000,
+                        ).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`text-xs border ${getStatusClass(lead.status)}`}
+                          variant={getStatusVariant(lead.status)}
+                        >
+                          {getStatusLabel(lead.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {lead.status.__kind__ === "new_" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 px-2"
+                              onClick={() => markStatus(lead.id, "contacted")}
+                              data-ocid={`leads.contacted.button.${idx + 1}`}
+                            >
+                              Mark Contacted
+                            </Button>
+                          )}
+                          {lead.status.__kind__ !== "converted" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 px-2 text-green-600 border-green-200 hover:bg-green-50"
+                              onClick={() => markStatus(lead.id, "converted")}
+                              data-ocid={`leads.converted.button.${idx + 1}`}
+                            >
+                              Mark Converted
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Offers / Coupons Tab ─────────────────────────────────────────────────────
+function OffersTab() {
+  const { actor, isFetching } = useActor();
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [code, setCode] = useState("");
+  const [discountType, setDiscountType] = useState<"percentage" | "flat">(
+    "percentage",
+  );
+  const [discountValue, setDiscountValue] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadCoupons = async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const list = await actor.getAllCoupons();
+      setCoupons(list);
+    } catch {
+      toast.error("Failed to load coupons");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadCoupons is stable within actor/isFetching scope
+  useEffect(() => {
+    if (!isFetching && actor) loadCoupons();
+  }, [actor, isFetching]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !code || !discountValue || !expiryDate) return;
+    setSaving(true);
+    try {
+      const dt: DiscountType =
+        discountType === "percentage"
+          ? { __kind__: "percentage", percentage: null }
+          : { __kind__: "flat", flat: null };
+      const expiry = BigInt(Date.parse(`${expiryDate}T23:59:59`) * 1_000_000);
+      await actor.createCoupon(
+        code.toUpperCase(),
+        dt,
+        BigInt(Number(discountValue)),
+        expiry,
+      );
+      toast.success("Coupon created!");
+      setCode("");
+      setDiscountValue("");
+      setExpiryDate("");
+      await loadCoupons();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to create coupon";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = async (coupon: Coupon) => {
+    if (!actor) return;
+    try {
+      await actor.toggleCoupon(coupon.id, !coupon.isActive);
+      toast.success(`Coupon ${coupon.isActive ? "disabled" : "enabled"}`);
+      await loadCoupons();
+    } catch {
+      toast.error("Failed to update coupon");
+    }
+  };
+
+  const handleDelete = async (id: bigint) => {
+    if (!actor) return;
+    try {
+      await actor.deleteCoupon(id);
+      toast.success("Coupon deleted");
+      await loadCoupons();
+    } catch {
+      toast.error("Failed to delete coupon");
+    }
+  };
+
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="space-y-6" data-ocid="offers.section">
+      {/* Create Coupon */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Tag className="w-4 h-4 text-primary" />
+            Create Coupon
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={handleCreate}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+          >
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Coupon Code
+              </Label>
+              <Input
+                placeholder="e.g. SAVE20"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                required
+                className="uppercase"
+                data-ocid="offers.input"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Discount Type
+              </Label>
+              <Select
+                value={discountType}
+                onValueChange={(v) =>
+                  setDiscountType(v as "percentage" | "flat")
+                }
+              >
+                <SelectTrigger data-ocid="offers.select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                  <SelectItem value="flat">Flat (₹)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                {discountType === "percentage" ? "Discount %" : "Discount ₹"}
+              </Label>
+              <Input
+                type="number"
+                min="1"
+                max={discountType === "percentage" ? "100" : undefined}
+                placeholder={
+                  discountType === "percentage" ? "e.g. 20" : "e.g. 50"
+                }
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value)}
+                required
+                data-ocid="offers.input"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Expiry Date
+              </Label>
+              <Input
+                type="date"
+                min={today}
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                required
+                data-ocid="offers.input"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Button
+                type="submit"
+                disabled={saving}
+                className="rounded-full"
+                data-ocid="offers.submit_button"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Coupon"
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Coupons List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Active Coupons</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-2" data-ocid="offers.loading_state">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : coupons.length === 0 ? (
+            <p
+              className="text-sm text-muted-foreground text-center py-8"
+              data-ocid="offers.empty_state"
+            >
+              No coupons yet. Create one above.
+            </p>
+          ) : (
+            <Table data-ocid="offers.table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead>Expiry</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {coupons.map((c, idx) => (
+                  <TableRow
+                    key={String(c.id)}
+                    data-ocid={`offers.item.${idx + 1}`}
+                  >
+                    <TableCell className="font-mono font-semibold">
+                      {c.code}
+                    </TableCell>
+                    <TableCell className="capitalize">
+                      {c.discountType.__kind__ === "percentage" ? "%" : "₹"}
+                    </TableCell>
+                    <TableCell>
+                      {c.discountType.__kind__ === "percentage"
+                        ? `${c.discountValue}%`
+                        : `₹${c.discountValue}`}
+                    </TableCell>
+                    <TableCell>{formatDate(c.expiryDate)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          c.isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                        }
+                      >
+                        {c.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Switch
+                        checked={c.isActive}
+                        onCheckedChange={() => handleToggle(c)}
+                        data-ocid={`offers.toggle.${idx + 1}`}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-600 h-8 w-8"
+                        onClick={() => handleDelete(c.id)}
+                        data-ocid={`offers.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Delivery Tab ─────────────────────────────────────────────────────────────
+function DeliveryTab() {
+  const { actor } = useActor();
+  const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
+  const [riders, setRiders] = useState<Rider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"today" | "scheduled" | "pending">(
+    "today",
+  );
+  const [selectedIds, setSelectedIds] = useState<Set<bigint>>(new Set());
+  const [bulkRiderId, setBulkRiderId] = useState<string>("");
+
+  // Add rider form
+  const [newRider, setNewRider] = useState({ name: "", mobile: "", area: "" });
+  const [addingRider, setAddingRider] = useState(false);
+
+  // Edit rider
+  const [editRiderId, setEditRiderId] = useState<bigint | null>(null);
+  const [editRider, setEditRider] = useState({
+    name: "",
+    mobile: "",
+    area: "",
+  });
+
+  // Create delivery form
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newDelivery, setNewDelivery] = useState({
+    orderId: "",
+    customerName: "",
+    address: "",
+    deliveryTime: "",
+    notes: "",
+  });
+  const [creatingDelivery, setCreatingDelivery] = useState(false);
+
+  useEffect(() => {
+    if (!actor) return;
+    setLoading(true);
+    Promise.all([actor.getAllDeliveries(), actor.getAllRiders()])
+      .then(([dels, rids]) => {
+        setDeliveries(dels);
+        setRiders(rids);
+      })
+      .catch(() => toast.error("Failed to load delivery data"))
+      .finally(() => setLoading(false));
+  }, [actor]);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const getDeliveryDate = (d: DeliveryRecord) =>
+    new Date(Number(d.deliveryTime) / 1_000_000);
+
+  const filteredDeliveries = deliveries.filter((d) => {
+    const dt = getDeliveryDate(d);
+    if (filter === "today") return dt >= today && dt <= todayEnd;
+    if (filter === "scheduled") return dt > todayEnd;
+    if (filter === "pending")
+      return (
+        d.status === DeliveryStatus.preparing ||
+        d.status === DeliveryStatus.ready
+      );
+    return true;
+  });
+
+  const totalToday = deliveries.filter((d) => {
+    const dt = getDeliveryDate(d);
+    return dt >= today && dt <= todayEnd;
+  }).length;
+  const pendingCount = deliveries.filter(
+    (d) =>
+      d.status === DeliveryStatus.preparing ||
+      d.status === DeliveryStatus.ready,
+  ).length;
+  const completedCount = deliveries.filter(
+    (d) => d.status === DeliveryStatus.delivered,
+  ).length;
+
+  const _statusBadge = (status: DeliveryStatus) => {
+    const map = {
+      [DeliveryStatus.preparing]: "bg-amber-100 text-amber-700",
+      [DeliveryStatus.ready]: "bg-blue-100 text-blue-700",
+      [DeliveryStatus.outForDelivery]: "bg-purple-100 text-purple-700",
+      [DeliveryStatus.delivered]: "bg-green-100 text-green-700",
+    };
+    const labels = {
+      [DeliveryStatus.preparing]: "Preparing",
+      [DeliveryStatus.ready]: "Ready",
+      [DeliveryStatus.outForDelivery]: "Out for Delivery",
+      [DeliveryStatus.delivered]: "Delivered",
+    };
+    return (
+      <span
+        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status]}`}
+      >
+        {labels[status]}
+      </span>
+    );
+  };
+
+  const toggleSelect = (id: bigint) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredDeliveries.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDeliveries.map((d) => d.id)));
+    }
+  };
+
+  const handleStatusChange = async (id: bigint, status: DeliveryStatus) => {
+    if (!actor) return;
+    try {
+      await actor.updateDeliveryStatus(id, status);
+      setDeliveries((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, status } : d)),
+      );
+      toast.success("Status updated");
+    } catch (_e) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleAssignRider = async (deliveryId: bigint, riderId: string) => {
+    if (!actor) return;
+    try {
+      await actor.assignRider(deliveryId, BigInt(riderId));
+      setDeliveries((prev) =>
+        prev.map((d) =>
+          d.id === deliveryId ? { ...d, riderId: BigInt(riderId) } : d,
+        ),
+      );
+      toast.success("Rider assigned");
+    } catch (_e) {
+      toast.error("Failed to assign rider");
+    }
+  };
+
+  const handleNoteBlur = async (id: bigint, notes: string) => {
+    if (!actor) return;
+    try {
+      await actor.updateDeliveryNote(id, notes);
+    } catch (_e) {
+      toast.error("Failed to save note");
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!actor || !bulkRiderId || selectedIds.size === 0) return;
+    try {
+      await actor.bulkAssignRider(Array.from(selectedIds), BigInt(bulkRiderId));
+      const rId = BigInt(bulkRiderId);
+      setDeliveries((prev) =>
+        prev.map((d) => (selectedIds.has(d.id) ? { ...d, riderId: rId } : d)),
+      );
+      setSelectedIds(new Set());
+      setBulkRiderId("");
+      toast.success(`Assigned rider to ${selectedIds.size} orders`);
+    } catch (_e) {
+      toast.error("Bulk assign failed");
+    }
+  };
+
+  const handleAddRider = async () => {
+    if (!actor || !newRider.name || !newRider.mobile) return;
+    setAddingRider(true);
+    try {
+      const id = await actor.addRider(
+        newRider.name,
+        newRider.mobile,
+        newRider.area,
+      );
+      setRiders((prev) => [...prev, { id, ...newRider }]);
+      setNewRider({ name: "", mobile: "", area: "" });
+      toast.success("Rider added");
+    } catch (_e) {
+      toast.error("Failed to add rider");
+    } finally {
+      setAddingRider(false);
+    }
+  };
+
+  const handleDeleteRider = async (id: bigint) => {
+    if (!actor) return;
+    try {
+      await actor.deleteRider(id);
+      setRiders((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Rider deleted");
+    } catch (_e) {
+      toast.error("Failed to delete rider");
+    }
+  };
+
+  const startEditRider = (r: Rider) => {
+    setEditRiderId(r.id);
+    setEditRider({ name: r.name, mobile: r.mobile, area: r.area });
+  };
+
+  const handleSaveRider = async (id: bigint) => {
+    if (!actor) return;
+    try {
+      await actor.updateRider(
+        id,
+        editRider.name,
+        editRider.mobile,
+        editRider.area,
+      );
+      setRiders((prev) =>
+        prev.map((r) => (r.id === id ? { id, ...editRider } : r)),
+      );
+      setEditRiderId(null);
+      toast.success("Rider updated");
+    } catch (_e) {
+      toast.error("Failed to update rider");
+    }
+  };
+
+  const handleCreateDelivery = async () => {
+    if (!actor || !newDelivery.orderId || !newDelivery.customerName) return;
+    setCreatingDelivery(true);
+    try {
+      const dtMs = newDelivery.deliveryTime
+        ? new Date(newDelivery.deliveryTime).getTime()
+        : Date.now();
+      const dtNs = BigInt(dtMs) * 1_000_000n;
+      const id = await actor.createDelivery(
+        BigInt(newDelivery.orderId),
+        newDelivery.customerName,
+        newDelivery.address,
+        dtNs,
+        newDelivery.notes,
+      );
+      const newRec: DeliveryRecord = {
+        id,
+        orderId: BigInt(newDelivery.orderId),
+        customerName: newDelivery.customerName,
+        address: newDelivery.address,
+        deliveryTime: dtNs,
+        status: DeliveryStatus.preparing,
+        riderId: null,
+        notes: newDelivery.notes,
+      };
+      setDeliveries((prev) => [newRec, ...prev]);
+      setNewDelivery({
+        orderId: "",
+        customerName: "",
+        address: "",
+        deliveryTime: "",
+        notes: "",
+      });
+      setShowCreateForm(false);
+      toast.success("Delivery created");
+    } catch (_e) {
+      toast.error("Failed to create delivery");
+    } finally {
+      setCreatingDelivery(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4" data-ocid="delivery.loading_state">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-ocid="delivery.section">
+      {/* Dashboard Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-100">
+              <Truck className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Today</p>
+              <p className="text-2xl font-bold text-green-700">{totalToday}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-100">
+              <Clock className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Pending</p>
+              <p className="text-2xl font-bold text-amber-700">
+                {pendingCount}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-100">
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Completed</p>
+              <p className="text-2xl font-bold text-blue-700">
+                {completedCount}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters + Create Button */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          {(["today", "scheduled", "pending"] as const).map((f) => (
+            <Button
+              key={f}
+              variant={filter === f ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter(f)}
+              className={filter === f ? "bg-primary text-white" : ""}
+              data-ocid={`delivery.${f}.tab`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </Button>
+          ))}
+        </div>
+        <Button
+          size="sm"
+          className="bg-primary text-white"
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          data-ocid="delivery.open_modal_button"
+        >
+          <ClipboardList className="w-4 h-4 mr-1.5" />
+          Add Delivery
+        </Button>
+      </div>
+
+      {/* Create Delivery Form */}
+      {showCreateForm && (
+        <Card className="border shadow-sm" data-ocid="delivery.modal">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Create New Delivery</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Order ID</Label>
+              <Input
+                placeholder="Order ID"
+                value={newDelivery.orderId}
+                onChange={(e) =>
+                  setNewDelivery((p) => ({ ...p, orderId: e.target.value }))
+                }
+                data-ocid="delivery.input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Customer Name</Label>
+              <Input
+                placeholder="Customer name"
+                value={newDelivery.customerName}
+                onChange={(e) =>
+                  setNewDelivery((p) => ({
+                    ...p,
+                    customerName: e.target.value,
+                  }))
+                }
+                data-ocid="delivery.input"
+              />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <Label className="text-xs">Address</Label>
+              <Input
+                placeholder="Delivery address"
+                value={newDelivery.address}
+                onChange={(e) =>
+                  setNewDelivery((p) => ({ ...p, address: e.target.value }))
+                }
+                data-ocid="delivery.input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Delivery Time</Label>
+              <Input
+                type="datetime-local"
+                value={newDelivery.deliveryTime}
+                onChange={(e) =>
+                  setNewDelivery((p) => ({
+                    ...p,
+                    deliveryTime: e.target.value,
+                  }))
+                }
+                data-ocid="delivery.input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Notes</Label>
+              <Input
+                placeholder="Gym name, instructions..."
+                value={newDelivery.notes}
+                onChange={(e) =>
+                  setNewDelivery((p) => ({ ...p, notes: e.target.value }))
+                }
+                data-ocid="delivery.input"
+              />
+            </div>
+            <div className="col-span-2 flex gap-2">
+              <Button
+                size="sm"
+                className="bg-primary text-white"
+                onClick={handleCreateDelivery}
+                disabled={creatingDelivery}
+                data-ocid="delivery.submit_button"
+              >
+                {creatingDelivery ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : null}
+                Save Delivery
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCreateForm(false)}
+                data-ocid="delivery.cancel_button"
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bulk Assignment */}
+      {selectedIds.size > 0 && (
+        <Card className="border border-primary/30 bg-primary/5 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium text-primary">
+              {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
+            </span>
+            <Select value={bulkRiderId} onValueChange={setBulkRiderId}>
+              <SelectTrigger
+                className="w-44 h-8 text-sm"
+                data-ocid="delivery.select"
+              >
+                <SelectValue placeholder="Select rider" />
+              </SelectTrigger>
+              <SelectContent>
+                {riders.map((r) => (
+                  <SelectItem key={String(r.id)} value={String(r.id)}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="bg-primary text-white h-8"
+              onClick={handleBulkAssign}
+              disabled={!bulkRiderId}
+              data-ocid="delivery.primary_button"
+            >
+              <UserCheck className="w-4 h-4 mr-1.5" />
+              Assign
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-muted-foreground"
+              onClick={() => setSelectedIds(new Set())}
+              data-ocid="delivery.cancel_button"
+            >
+              Clear
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Deliveries Table */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            Deliveries
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              {filteredDeliveries.length} records
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {filteredDeliveries.length === 0 ? (
+            <div
+              className="text-center py-12 text-muted-foreground"
+              data-ocid="delivery.empty_state"
+            >
+              <Truck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No deliveries for this filter</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table data-ocid="delivery.table">
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={
+                          filteredDeliveries.length > 0 &&
+                          selectedIds.size === filteredDeliveries.length
+                        }
+                        onCheckedChange={toggleSelectAll}
+                        data-ocid="delivery.checkbox"
+                      />
+                    </TableHead>
+                    <TableHead className="text-xs">Order ID</TableHead>
+                    <TableHead className="text-xs">Customer</TableHead>
+                    <TableHead className="text-xs hidden md:table-cell">
+                      Address
+                    </TableHead>
+                    <TableHead className="text-xs hidden md:table-cell">
+                      Delivery Time
+                    </TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Rider</TableHead>
+                    <TableHead className="text-xs hidden lg:table-cell">
+                      Notes
+                    </TableHead>
+                    <TableHead className="text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredDeliveries.map((d, idx) => (
+                    <DeliveryRow
+                      key={String(d.id)}
+                      delivery={d}
+                      riders={riders}
+                      selected={selectedIds.has(d.id)}
+                      onToggle={() => toggleSelect(d.id)}
+                      onStatusChange={(s) => handleStatusChange(d.id, s)}
+                      onAssignRider={(rid) => handleAssignRider(d.id, rid)}
+                      onNoteBlur={(note) => handleNoteBlur(d.id, note)}
+                      index={idx + 1}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Rider Management */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-primary" />
+            Riders
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add Rider Form */}
+          <div className="grid grid-cols-4 gap-2 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs">Name</Label>
+              <Input
+                placeholder="Rider name"
+                value={newRider.name}
+                onChange={(e) =>
+                  setNewRider((p) => ({ ...p, name: e.target.value }))
+                }
+                data-ocid="rider.input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Mobile</Label>
+              <Input
+                placeholder="Mobile"
+                value={newRider.mobile}
+                onChange={(e) =>
+                  setNewRider((p) => ({ ...p, mobile: e.target.value }))
+                }
+                data-ocid="rider.input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Area / Gym</Label>
+              <Input
+                placeholder="Assigned area"
+                value={newRider.area}
+                onChange={(e) =>
+                  setNewRider((p) => ({ ...p, area: e.target.value }))
+                }
+                data-ocid="rider.input"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="bg-primary text-white"
+              onClick={handleAddRider}
+              disabled={addingRider || !newRider.name}
+              data-ocid="rider.primary_button"
+            >
+              {addingRider ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Add Rider"
+              )}
+            </Button>
+          </div>
+
+          {/* Riders Table */}
+          {riders.length === 0 ? (
+            <div
+              className="text-center py-8 text-muted-foreground"
+              data-ocid="rider.empty_state"
+            >
+              <p className="text-sm">No riders added yet</p>
+            </div>
+          ) : (
+            <Table data-ocid="rider.table">
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs">Name</TableHead>
+                  <TableHead className="text-xs">Mobile</TableHead>
+                  <TableHead className="text-xs">Area</TableHead>
+                  <TableHead className="text-xs">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {riders.map((r, idx) => (
+                  <TableRow
+                    key={String(r.id)}
+                    data-ocid={`rider.row.${idx + 1}`}
+                  >
+                    {editRiderId === r.id ? (
+                      <>
+                        <TableCell>
+                          <Input
+                            value={editRider.name}
+                            onChange={(e) =>
+                              setEditRider((p) => ({
+                                ...p,
+                                name: e.target.value,
+                              }))
+                            }
+                            className="h-7 text-sm"
+                            data-ocid="rider.input"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={editRider.mobile}
+                            onChange={(e) =>
+                              setEditRider((p) => ({
+                                ...p,
+                                mobile: e.target.value,
+                              }))
+                            }
+                            className="h-7 text-sm"
+                            data-ocid="rider.input"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={editRider.area}
+                            onChange={(e) =>
+                              setEditRider((p) => ({
+                                ...p,
+                                area: e.target.value,
+                              }))
+                            }
+                            className="h-7 text-sm"
+                            data-ocid="rider.input"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 bg-primary text-white text-xs"
+                              onClick={() => handleSaveRider(r.id)}
+                              data-ocid="rider.save_button"
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setEditRiderId(null)}
+                              data-ocid="rider.cancel_button"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-sm font-medium">
+                          {r.name}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {r.mobile}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {r.area}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50"
+                              onClick={() => startEditRider(r)}
+                              data-ocid={`rider.edit_button.${idx + 1}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
+                              onClick={() => handleDeleteRider(r.id)}
+                              data-ocid={`rider.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function DeliveryRow({
+  delivery,
+  riders,
+  selected,
+  onToggle,
+  onStatusChange,
+  onAssignRider,
+  onNoteBlur,
+  index,
+}: {
+  delivery: DeliveryRecord;
+  riders: Rider[];
+  selected: boolean;
+  onToggle: () => void;
+  onStatusChange: (s: DeliveryStatus) => void;
+  onAssignRider: (riderId: string) => void;
+  onNoteBlur: (note: string) => void;
+  index: number;
+}) {
+  const [note, setNote] = useState(delivery.notes);
+  const dt = new Date(Number(delivery.deliveryTime) / 1_000_000);
+  const formattedDate = dt.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const statusLabels: Record<DeliveryStatus, string> = {
+    [DeliveryStatus.preparing]: "Preparing",
+    [DeliveryStatus.ready]: "Ready",
+    [DeliveryStatus.outForDelivery]: "Out for Delivery",
+    [DeliveryStatus.delivered]: "Delivered",
+  };
+  const statusBadge = (status: DeliveryStatus) => {
+    const map = {
+      [DeliveryStatus.preparing]: "bg-amber-100 text-amber-700",
+      [DeliveryStatus.ready]: "bg-blue-100 text-blue-700",
+      [DeliveryStatus.outForDelivery]: "bg-purple-100 text-purple-700",
+      [DeliveryStatus.delivered]: "bg-green-100 text-green-700",
+    };
+    return (
+      <span
+        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status]}`}
+      >
+        {statusLabels[status]}
+      </span>
+    );
+  };
+
+  return (
+    <TableRow
+      data-ocid={`delivery.item.${index}`}
+      className={selected ? "bg-primary/5" : ""}
+    >
+      <TableCell>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggle}
+          data-ocid={`delivery.checkbox.${index}`}
+        />
+      </TableCell>
+      <TableCell className="text-xs font-mono text-muted-foreground">
+        #{String(delivery.orderId)}
+      </TableCell>
+      <TableCell className="text-sm font-medium">
+        {delivery.customerName}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground hidden md:table-cell max-w-32 truncate">
+        {delivery.address}
+      </TableCell>
+      <TableCell className="text-xs hidden md:table-cell">
+        {formattedDate}
+      </TableCell>
+      <TableCell>{statusBadge(delivery.status)}</TableCell>
+      <TableCell>
+        <Select
+          value={delivery.riderId ? String(delivery.riderId) : ""}
+          onValueChange={onAssignRider}
+        >
+          <SelectTrigger
+            className="w-28 h-7 text-xs"
+            data-ocid={"delivery.select"}
+          >
+            <SelectValue placeholder="Assign" />
+          </SelectTrigger>
+          <SelectContent>
+            {riders.map((r) => (
+              <SelectItem key={String(r.id)} value={String(r.id)}>
+                {r.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell className="hidden lg:table-cell">
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={() => onNoteBlur(note)}
+          placeholder="Notes..."
+          className="text-xs h-8 min-h-0 resize-none py-1"
+          data-ocid={"delivery.textarea"}
+        />
+      </TableCell>
+      <TableCell>
+        <Select
+          value={delivery.status}
+          onValueChange={(v) => onStatusChange(v as DeliveryStatus)}
+        >
+          <SelectTrigger
+            className="w-36 h-7 text-xs"
+            data-ocid={"delivery.select"}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={DeliveryStatus.preparing}>Preparing</SelectItem>
+            <SelectItem value={DeliveryStatus.ready}>Ready</SelectItem>
+            <SelectItem value={DeliveryStatus.outForDelivery}>
+              Out for Delivery
+            </SelectItem>
+            <SelectItem value={DeliveryStatus.delivered}>Delivered</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ─── Main Admin Panel ─────────────────────────────────────────────────────────
+export default function AdminPanel() {
+  const { isAuthenticated, isInitializing } = useAuth();
+  const { actor, isFetching } = useActor();
+  const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isInitializing && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [isInitializing, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    actor
+      .isCallerAdmin()
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false));
+  }, [actor, isFetching]);
+
+  if (isInitializing || isFetching || isAdmin === null) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        data-ocid="admin.loading_state"
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main
+          className="flex-1 flex flex-col items-center justify-center gap-4 px-4"
+          data-ocid="admin.error_state"
+        >
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+          <p className="text-muted-foreground text-center max-w-sm">
+            You don't have admin privileges to view this page.
+          </p>
+          <Button
+            variant="outline"
+            className="rounded-full border-primary text-primary"
+            onClick={() => navigate({ to: "/" })}
+            data-ocid="admin.button"
+          >
+            Go Back Home
+          </Button>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar />
+      <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+            Admin Panel
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage orders, users, subscriptions and inventory
+          </p>
+        </div>
+
+        <Tabs defaultValue="analytics" className="w-full" data-ocid="admin.tab">
+          <TabsList className="w-full justify-start mb-6 bg-muted/60 rounded-xl p-1 h-auto flex-wrap gap-1">
+            <TabsTrigger
+              value="analytics"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.analytics.tab"
+            >
+              <BarChart3 className="w-4 h-4 mr-1.5" />
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger
+              value="orders"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.orders.tab"
+            >
+              <Package className="w-4 h-4 mr-1.5" />
+              Orders
+            </TabsTrigger>
+            <TabsTrigger
+              value="users"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.users.tab"
+            >
+              <Users className="w-4 h-4 mr-1.5" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger
+              value="subscriptions"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.subs.tab"
+            >
+              Subscriptions
+            </TabsTrigger>
+            <TabsTrigger
+              value="inventory"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.inventory.tab"
+            >
+              Inventory
+            </TabsTrigger>
+            <TabsTrigger
+              value="leads"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.leads.tab"
+            >
+              Leads
+            </TabsTrigger>
+            <TabsTrigger
+              value="menu"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.menu.tab"
+            >
+              <Utensils className="w-4 h-4 mr-1.5" />
+              Menu
+            </TabsTrigger>
+            <TabsTrigger
+              value="offers"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.offers.tab"
+            >
+              <Tag className="w-4 h-4 mr-1.5" />
+              Offers
+            </TabsTrigger>
+            <TabsTrigger
+              value="delivery"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.delivery.tab"
+            >
+              <Truck className="w-4 h-4 mr-1.5" />
+              Delivery
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="analytics">
+            <AnalyticsTab />
+          </TabsContent>
+          <TabsContent value="orders">
+            <OrdersTab />
+          </TabsContent>
+          <TabsContent value="users">
+            <UsersTab />
+          </TabsContent>
+          <TabsContent value="subscriptions">
+            <SubscriptionsTab />
+          </TabsContent>
+          <TabsContent value="inventory">
+            <InventoryTab />
+          </TabsContent>
+          <TabsContent value="leads">
+            <LeadsTab />
+          </TabsContent>
+          <TabsContent value="menu">
+            <MenuManagementTab />
+          </TabsContent>
+          <TabsContent value="offers">
+            <OffersTab />
+          </TabsContent>
+          <TabsContent value="delivery">
+            <DeliveryTab />
+          </TabsContent>
+        </Tabs>
+      </main>
+      <Footer />
+    </div>
+  );
+}

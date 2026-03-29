@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.875rem;
+
+    /* Brand green #2F8F3A → oklch(0.55 0.148 145) */
+    --primary: 0.55 0.148 145;
+    --primary-foreground: 1 0 0;
+
+    /* Light mint #EAF5EC → oklch(0.96 0.028 145) */
+    --accent: 0.96 0.028 145;
+    --accent-foreground: 0.22 0.04 150;
+
+    /* Page backgrounds */
+    --background: 1 0 0;
+    --foreground: 0.18 0.012 250;
+
+    /* Cards */
+    --card: 1 0 0;
+    --card-foreground: 0.18 0.012 250;
+
+    /* Popover */
+    --popover: 1 0 0;
+    --popover-foreground: 0.18 0.012 250;
+
+    /* Secondary */
+    --secondary: 0.96 0.028 145;
+    --secondary-foreground: 0.22 0.04 150;
+
+    /* Muted text #6B7280 → oklch(0.54 0.018 250) */
+    --muted: 0.97 0.005 250;
+    --muted-foreground: 0.54 0.018 250;
+
+    /* Borders #E5E7EB → oklch(0.92 0.008 250) */
+    --border: 0.92 0.008 250;
+    --input: 0.92 0.008 250;
+    --ring: 0.55 0.148 145;
+
+    /* Destructive */
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 1 0 0;
+
+    /* Charts */
+    --chart-1: 0.55 0.148 145;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+
+    /* Sidebar */
+    --sidebar: 1 0 0;
+    --sidebar-foreground: 0.18 0.012 250;
+    --sidebar-primary: 0.55 0.148 145;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.96 0.028 145;
+    --sidebar-accent-foreground: 0.22 0.04 150;
+    --sidebar-border: 0.92 0.008 250;
+    --sidebar-ring: 0.55 0.148 145;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-poppins;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .hero-gradient {
+    background: linear-gradient(
+      135deg,
+      oklch(0.22 0.04 150) 0%,
+      oklch(0.27 0.05 150) 100%
+    );
+  }
+
+  .green-gradient {
+    background: linear-gradient(
+      135deg,
+      oklch(0.55 0.148 145) 0%,
+      oklch(0.45 0.13 148) 100%
+    );
+  }
+}
