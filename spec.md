@@ -1,32 +1,33 @@
-# Salad Khatora — Customer Management System
+# Salad Khatora
 
 ## Current State
-The admin panel at `/admin` has a Users tab (`UsersTab` component in `AdminPanel.tsx`) implemented in Version 22. It includes: user list with search/filter, `UserDetailSheet` slide-over with profile, insights, subscription, order history, notes, quick actions (WhatsApp, Offer Discount), and admin actions (edit, delete, VIP toggle). Backend has all required functions: `getAllUsers`, `getAllOrders`, `getAllSubscriptions`, `getUserMeta`, `setUserVip`, `addUserNote`, `deleteUserNote`, `deleteUser`, `updateUserProfileByAdmin`.
+The Users tab in AdminPanel.tsx already has UserStats (totalOrders, totalSpent, lastOrderDate, hasSubscription) computed via computeUserStats. It shows inline Inactive 7d/15d badges on user cards. Filters: all, active, inactive7, inactive15, subscribers.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Engagement tracking: show "Inactive 7d" / "Inactive 15d" badges in the user list
-- Filter for inactive users (no orders in last 7/15 days) in the Users List
-- Last order date column visible in user list cards
-- Active subscription (Yes/No) clearly shown in user list
-- Total orders count in user list cards
-- Average order value in User Insights section
-- Favorite salads (most ordered) in User Insights
+- `getSegment(stats)` helper that returns one of four segments: `new` | `active` | `high_value` | `inactive` using:
+  - **New**: 0 orders
+  - **High Value**: totalOrders >= 5 OR totalSpent >= 1000 (and not inactive)
+  - **Active**: lastOrderDate within 30 days (and not high value)
+  - **Inactive**: lastOrderDate > 30 days ago OR (has orders but no recent activity)
+- Segment badge displayed on each user card in the list (colored pill: New=blue, Active=green, High Value=amber/gold, Inactive=red)
+- New filter pills: "New", "Active", "High Value", "Inactive" (in addition to existing ones)
+- "Send Offer" button on user cards where segment === 'inactive' — opens WhatsApp with pre-filled message: "Hi, we miss you at Salad Khatora! Get 10% off on your next order." using mobile number from profile
 
 ### Modify
-- Ensure the Users List shows: Name, Mobile, Email, Total Orders, Active Subscription (Yes/No badge), Last Order Date
-- Ensure filters work: All, Active Users, Inactive Users, Subscribers
-- Search by name OR mobile
-- User Detail Sheet must show full profile (Name, Mobile, Email, Address, Age, Height, Weight, BMI)
-- Ensure all sections in detail sheet are present: Profile, Order History, Subscription Details, User Insights, Notes, Admin Actions, Quick Actions
+- Replace existing Inactive 7d/15d inline badge logic with the new segment badge
+- Keep existing inactive7 / inactive15 filter pills OR merge them (keep for now, just add new segment-based filters alongside)
+- User card shows: segment badge, totalOrders, totalSpent (₹), subscription status, lastOrderDate
 
 ### Remove
-- Nothing to remove
+- Standalone Inactive 7d/15d badges replaced by segment badge system
 
 ## Implementation Plan
-1. Review existing `UsersTab` in AdminPanel.tsx and verify all list fields are displayed correctly
-2. Ensure filter logic handles `inactive7` and `inactive15` cases (no orders in last 7/15 days)
-3. Verify UserDetailSheet has all required sections
-4. Fix any TypeScript errors or missing data
-5. Validate and build
+1. Add `getSegment(stats: UserStats): 'new' | 'active' | 'high_value' | 'inactive'` function
+2. Add `SegmentBadge` component rendering colored badge per segment
+3. Add segment filter buttons: new, active, high_value, inactive
+4. Update filter logic in `filtered` useMemo to handle new segment filters
+5. In user card list item: replace old inactive badges with SegmentBadge; add totalSpent display
+6. Add "Send Offer" WhatsApp button on cards where segment === 'inactive' and mobile is available
+   - WhatsApp URL: `https://wa.me/91${mobile}?text=Hi%2C%20we%20miss%20you%20at%20Salad%20Khatora%21%20Get%2010%25%20off%20on%20your%20next%20order.`

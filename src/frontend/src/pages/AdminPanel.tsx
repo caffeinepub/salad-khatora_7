@@ -61,6 +61,7 @@ import {
   Leaf,
   Loader2,
   MapPin,
+  MessageCircle,
   Package,
   Pencil,
   Search,
@@ -569,6 +570,46 @@ function formatDateReadable(ts: bigint) {
 function daysSince(ts: bigint) {
   return Math.floor(
     (Date.now() - Number(ts) / 1_000_000) / (1000 * 60 * 60 * 24),
+  );
+}
+
+function getSegment(
+  stats: UserStats,
+): "new" | "active" | "high_value" | "inactive" {
+  if (stats.totalOrders === 0) return "new";
+  const days =
+    stats.lastOrderDate !== null ? daysSince(stats.lastOrderDate) : null;
+  if (days === null || days > 30) return "inactive";
+  if (stats.totalOrders >= 5 || stats.totalSpent >= 1000) return "high_value";
+  return "active";
+}
+
+function SegmentBadge({ segment }: { segment: ReturnType<typeof getSegment> }) {
+  const config = {
+    new: {
+      label: "New",
+      className: "bg-blue-100 text-blue-700 border-blue-200",
+    },
+    active: {
+      label: "Active",
+      className: "bg-green-100 text-green-700 border-green-200",
+    },
+    high_value: {
+      label: "⭐ High Value",
+      className: "bg-amber-100 text-amber-700 border-amber-200",
+    },
+    inactive: {
+      label: "Inactive",
+      className: "bg-red-100 text-red-600 border-red-200",
+    },
+  };
+  const c = config[segment];
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-semibold border ${c.className}`}
+    >
+      {c.label}
+    </span>
   );
 }
 
@@ -1248,7 +1289,15 @@ function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<
-    "all" | "active" | "inactive7" | "inactive15" | "subscribers"
+    | "all"
+    | "active"
+    | "inactive7"
+    | "inactive15"
+    | "subscribers"
+    | "segment_new"
+    | "segment_active"
+    | "segment_high_value"
+    | "segment_inactive"
   >("all");
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
 
@@ -1291,12 +1340,17 @@ function UsersTab() {
       const stats = statsMap[u.principal.toString()];
       const days =
         stats.lastOrderDate !== null ? daysSince(stats.lastOrderDate) : null;
+      const segment = getSegment(stats);
       const matchFilter =
         filter === "all" ||
         (filter === "active" && days !== null && days < 7) ||
         (filter === "inactive7" && (days === null || days >= 7)) ||
         (filter === "inactive15" && (days === null || days >= 15)) ||
-        (filter === "subscribers" && stats.hasSubscription);
+        (filter === "subscribers" && stats.hasSubscription) ||
+        (filter === "segment_new" && segment === "new") ||
+        (filter === "segment_active" && segment === "active") ||
+        (filter === "segment_high_value" && segment === "high_value") ||
+        (filter === "segment_inactive" && segment === "inactive");
 
       return matchSearch && matchFilter;
     });
@@ -1342,6 +1396,10 @@ function UsersTab() {
               { key: "inactive7", label: "Inactive 7d" },
               { key: "inactive15", label: "Inactive 15d" },
               { key: "subscribers", label: "Subscribers" },
+              { key: "segment_new", label: "🆕 New" },
+              { key: "segment_active", label: "✅ Active" },
+              { key: "segment_high_value", label: "⭐ High Value" },
+              { key: "segment_inactive", label: "💤 Inactive" },
             ] as const
           ).map(({ key, label }) => (
             <button
@@ -1388,31 +1446,7 @@ function UsersTab() {
                         <p className="font-semibold text-sm truncate">
                           {u.profile.name || "—"}
                         </p>
-                        {(() => {
-                          const d =
-                            stats.lastOrderDate !== null
-                              ? daysSince(stats.lastOrderDate)
-                              : null;
-                          if (d === null || d >= 15)
-                            return (
-                              <Badge
-                                variant="outline"
-                                className="text-red-500 border-red-300 text-[10px] px-1.5 py-0"
-                              >
-                                Inactive 15d
-                              </Badge>
-                            );
-                          if (d >= 7)
-                            return (
-                              <Badge
-                                variant="outline"
-                                className="text-amber-600 border-amber-300 text-[10px] px-1.5 py-0"
-                              >
-                                Inactive 7d
-                              </Badge>
-                            );
-                          return null;
-                        })()}
+                        <SegmentBadge segment={getSegment(stats)} />
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {u.profile.mobile || "—"}
@@ -1426,6 +1460,11 @@ function UsersTab() {
                     <p className="text-xs font-semibold text-primary">
                       {stats.totalOrders} orders
                     </p>
+                    {stats.totalSpent > 0 && (
+                      <p className="text-xs font-semibold text-amber-600">
+                        ₹{stats.totalSpent.toLocaleString("en-IN")}
+                      </p>
+                    )}
                     <p className="text-[10px] text-muted-foreground">
                       Sub:{" "}
                       <span
@@ -1449,6 +1488,32 @@ function UsersTab() {
                     )}
                   </div>
                 </div>
+                {getSegment(stats) === "inactive" && u.profile.mobile && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const mobile = u.profile.mobile.replace(/\D/g, "");
+                        const num = mobile.startsWith("91")
+                          ? mobile
+                          : `91${mobile}`;
+                        const msg = encodeURIComponent(
+                          "Hi, we miss you at Salad Khatora! Get 10% off on your next order.",
+                        );
+                        window.open(
+                          `https://wa.me/${num}?text=${msg}`,
+                          "_blank",
+                        );
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-green-500 hover:bg-green-600 text-white transition-colors"
+                      data-ocid={`admin.users.send_offer.button.${i + 1}`}
+                    >
+                      <MessageCircle className="w-3 h-3" />
+                      Send Offer
+                    </button>
+                  </div>
+                )}
               </button>
             );
           })}
