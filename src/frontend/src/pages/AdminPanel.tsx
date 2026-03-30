@@ -62,6 +62,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  MessageSquare,
   Package,
   Pencil,
   PhoneCall,
@@ -91,6 +92,8 @@ import {
   type Order,
   OrderStatus,
   PlanType,
+  type Review,
+  ReviewStatus,
   type Rider,
   type Subscription,
   Variant_active_expired,
@@ -3689,6 +3692,237 @@ function DeliveryRow({
   );
 }
 
+// ─── Reviews Tab ─────────────────────────────────────────────────────────────
+function ReviewsTab() {
+  const { actor } = useActor();
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "approved" | "rejected"
+  >("pending");
+
+  async function loadReviews() {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const data = await actor.getAllReviews();
+      const sorted = [...data].sort((a, b) => Number(b.date) - Number(a.date));
+      setReviews(sorted);
+    } catch {
+      toast.error("Failed to load reviews");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadReviews is intentionally excluded
+  useEffect(() => {
+    loadReviews();
+  }, [actor]);
+
+  async function handleUpdateStatus(id: string, status: ReviewStatus) {
+    if (!actor) return;
+    try {
+      await actor.updateReviewStatus(id, status);
+      toast.success("Review updated");
+      loadReviews();
+    } catch {
+      toast.error("Failed to update review");
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!actor) return;
+    try {
+      await actor.deleteReview(id);
+      toast.success("Review deleted");
+      loadReviews();
+    } catch {
+      toast.error("Failed to delete review");
+    }
+  }
+
+  const filteredReviews = useMemo(() => {
+    if (filter === "all") return reviews;
+    if (filter === "pending")
+      return reviews.filter((r) => r.status === ReviewStatus.pending);
+    if (filter === "approved")
+      return reviews.filter((r) => r.status === ReviewStatus.approved);
+    if (filter === "rejected")
+      return reviews.filter((r) => r.status === ReviewStatus.rejected);
+    return reviews;
+  }, [reviews, filter]);
+
+  function getStatusLabel(status: ReviewStatus) {
+    if (status === ReviewStatus.pending) return "Pending";
+    if (status === ReviewStatus.approved) return "Approved";
+    if (status === ReviewStatus.rejected) return "Rejected";
+    return "Unknown";
+  }
+
+  function getStatusBadgeClass(status: ReviewStatus) {
+    if (status === ReviewStatus.pending) return "bg-yellow-100 text-yellow-800";
+    if (status === ReviewStatus.approved) return "bg-green-100 text-green-800";
+    if (status === ReviewStatus.rejected) return "bg-red-100 text-red-800";
+    return "";
+  }
+
+  function renderStars(rating: bigint) {
+    const n = Number(rating);
+    return (
+      <span className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Star
+            key={i}
+            className={`w-3.5 h-3.5 ${i <= n ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  const counts = useMemo(
+    () => ({
+      pending: reviews.filter((r) => r.status === ReviewStatus.pending).length,
+      approved: reviews.filter((r) => r.status === ReviewStatus.approved)
+        .length,
+      rejected: reviews.filter((r) => r.status === ReviewStatus.rejected)
+        .length,
+    }),
+    [reviews],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Reviews</h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadReviews}
+          disabled={loading}
+          data-ocid="reviews.secondary_button"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
+        </Button>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        {(["pending", "approved", "rejected", "all"] as const).map((f) => (
+          <button
+            type="button"
+            key={f}
+            onClick={() => setFilter(f)}
+            data-ocid={`reviews.${f}.tab`}
+            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+              filter === f
+                ? "bg-primary text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f !== "all" && (
+              <span className="ml-1 text-xs opacity-75">
+                ({counts[f as keyof typeof counts]})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3" data-ocid="reviews.loading_state">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : filteredReviews.length === 0 ? (
+        <div
+          className="text-center py-12 text-gray-500"
+          data-ocid="reviews.empty_state"
+        >
+          <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No reviews found</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredReviews.map((review, idx) => (
+            <Card
+              key={review.id}
+              className="rounded-xl shadow-sm"
+              data-ocid={`reviews.item.${idx + 1}`}
+            >
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-sm">
+                      {review.userName || "Anonymous"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {renderStars(review.rating)}
+                      <span className="text-xs text-gray-500">
+                        {new Date(
+                          Number(review.date) / 1_000_000,
+                        ).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusBadgeClass(review.status)}`}
+                  >
+                    {getStatusLabel(review.status)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{review.comment}</p>
+                <div className="flex gap-2 pt-1">
+                  {review.status !== ReviewStatus.approved && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-700 border-green-200 hover:bg-green-50 text-xs h-7"
+                      onClick={() =>
+                        handleUpdateStatus(review.id, ReviewStatus.approved)
+                      }
+                      data-ocid="reviews.confirm_button"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                      Approve
+                    </Button>
+                  )}
+                  {review.status !== ReviewStatus.rejected && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-orange-700 border-orange-200 hover:bg-orange-50 text-xs h-7"
+                      onClick={() =>
+                        handleUpdateStatus(review.id, ReviewStatus.rejected)
+                      }
+                      data-ocid="reviews.cancel_button"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 mr-1" />
+                      Reject
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-700 border-red-200 hover:bg-red-50 text-xs h-7"
+                    onClick={() => handleDelete(review.id)}
+                    data-ocid="reviews.delete_button"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Leads Tab ────────────────────────────────────────────────────────────────
 function LeadsTab() {
   const { actor } = useActor();
@@ -4071,6 +4305,14 @@ export default function AdminPanel() {
               <PhoneCall className="w-4 h-4 mr-1.5" />
               Leads
             </TabsTrigger>
+            <TabsTrigger
+              value="reviews"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.reviews.tab"
+            >
+              <MessageSquare className="w-4 h-4 mr-1.5" />
+              Reviews
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics">
@@ -4099,6 +4341,9 @@ export default function AdminPanel() {
           </TabsContent>
           <TabsContent value="leads">
             {activeTab === "leads" && <LeadsTab />}
+          </TabsContent>
+          <TabsContent value="reviews">
+            {activeTab === "reviews" && <ReviewsTab />}
           </TabsContent>
         </Tabs>
       </main>
