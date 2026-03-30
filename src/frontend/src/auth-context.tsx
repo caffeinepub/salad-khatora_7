@@ -27,8 +27,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
 
+  // On reconnect, only invalidate data queries — never the actor itself.
+  // Invalidating the actor causes it to recreate which floods all queries.
   const handleReconnect = useCallback(() => {
-    queryClient.invalidateQueries();
+    queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] !== "actor",
+    });
   }, [queryClient]);
 
   const { isOnline, connectionStatus } = useConnectionManager(
