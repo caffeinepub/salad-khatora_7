@@ -64,6 +64,7 @@ import {
   MessageCircle,
   Package,
   Pencil,
+  PhoneCall,
   Search,
   ShieldAlert,
   ShoppingCart,
@@ -3689,6 +3690,226 @@ function DeliveryRow({
   );
 }
 
+// ─── Leads Tab ────────────────────────────────────────────────────────────────
+function LeadsTab() {
+  const { actor } = useActor();
+  const [leads, setLeads] = useState<
+    Array<{
+      id: bigint;
+      name: string;
+      mobile: string;
+      date: bigint;
+      status: string;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "today" | "week">("all");
+  const [mobileSearch, setMobileSearch] = useState("");
+  const [updating, setUpdating] = useState<bigint | null>(null);
+
+  async function loadLeads() {
+    if (!actor) return;
+    try {
+      const data = await actor.getLeads();
+      setLeads(
+        data as Array<{
+          id: bigint;
+          name: string;
+          mobile: string;
+          date: bigint;
+          status: string;
+        }>,
+      );
+    } catch (_e) {
+      toast.error("Failed to load leads");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadLeads is intentionally excluded
+  useEffect(() => {
+    loadLeads();
+  }, [actor]);
+
+  const filteredLeads = useMemo(() => {
+    const now = Date.now();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    return leads.filter((lead) => {
+      const dateMs = Number(lead.date) / 1_000_000;
+      if (filter === "today" && dateMs < todayStart.getTime()) return false;
+      if (filter === "week" && dateMs < weekStart.getTime()) return false;
+      if (mobileSearch && !lead.mobile.includes(mobileSearch)) return false;
+      return true;
+    });
+  }, [leads, filter, mobileSearch]);
+
+  async function handleStatusUpdate(id: bigint, newStatus: string) {
+    if (!actor) return;
+    setUpdating(id);
+    try {
+      await actor.updateLeadStatus(
+        id,
+        newStatus as "new_" | "contacted" | "converted",
+      );
+      await loadLeads();
+      toast.success("Lead status updated");
+    } catch (_e) {
+      toast.error("Failed to update lead");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <PhoneCall className="w-5 h-5 text-primary" />
+            Leads
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search + Filters */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by mobile..."
+                value={mobileSearch}
+                onChange={(e) => setMobileSearch(e.target.value)}
+                className="pl-9"
+                data-ocid="leads.search_input"
+              />
+            </div>
+            <div className="flex gap-2">
+              {(["all", "today", "week"] as const).map((f) => (
+                <Button
+                  key={f}
+                  size="sm"
+                  variant={filter === f ? "default" : "outline"}
+                  onClick={() => setFilter(f)}
+                  data-ocid="leads.filter.toggle"
+                >
+                  {f === "all" ? "All" : f === "today" ? "Today" : "This Week"}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Leads list */}
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton
+                  key={i}
+                  className="h-24 w-full rounded-xl"
+                  data-ocid="leads.loading_state"
+                />
+              ))}
+            </div>
+          ) : filteredLeads.length === 0 ? (
+            <div
+              className="text-center py-12 text-muted-foreground"
+              data-ocid="leads.empty_state"
+            >
+              <PhoneCall className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No leads found</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredLeads.map((lead, idx) => {
+                const dateMs = Number(lead.date) / 1_000_000;
+                const statusLabel =
+                  lead.status === "new_"
+                    ? "New"
+                    : lead.status === "contacted"
+                      ? "Contacted"
+                      : "Converted";
+                const statusColor =
+                  lead.status === "new_"
+                    ? "bg-blue-100 text-blue-700"
+                    : lead.status === "contacted"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-green-100 text-green-700";
+
+                return (
+                  <div
+                    key={String(lead.id)}
+                    className="border rounded-xl p-4 bg-white space-y-3"
+                    data-ocid={String(idx + 1)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-sm">{lead.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {lead.mobile}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(dateMs).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span
+                        className={[
+                          "text-xs font-medium px-2 py-1 rounded-full",
+                          statusColor,
+                        ].join(" ")}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {lead.status === "new_" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-yellow-700 border-yellow-300 hover:bg-yellow-50"
+                          disabled={updating === lead.id}
+                          onClick={() =>
+                            handleStatusUpdate(lead.id, "contacted")
+                          }
+                          data-ocid="leads.contacted.button"
+                        >
+                          {updating === lead.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            "Mark as Contacted"
+                          )}
+                        </Button>
+                      )}
+                      {lead.status !== "converted" && (
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          disabled={updating === lead.id}
+                          onClick={() =>
+                            handleStatusUpdate(lead.id, "converted")
+                          }
+                          data-ocid="leads.converted.button"
+                        >
+                          {updating === lead.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            "Mark as Converted"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const { isAuthenticated, isInitializing } = useAuth();
@@ -3827,6 +4048,14 @@ export default function AdminPanel() {
               <Truck className="w-4 h-4 mr-1.5" />
               Delivery
             </TabsTrigger>
+            <TabsTrigger
+              value="leads"
+              className="rounded-lg text-sm px-4 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary"
+              data-ocid="admin.leads.tab"
+            >
+              <PhoneCall className="w-4 h-4 mr-1.5" />
+              Leads
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics">
@@ -3852,6 +4081,9 @@ export default function AdminPanel() {
           </TabsContent>
           <TabsContent value="delivery">
             <DeliveryTab />
+          </TabsContent>
+          <TabsContent value="leads">
+            <LeadsTab />
           </TabsContent>
         </Tabs>
       </main>
