@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActor } from "@/hooks/useActor";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -8,10 +9,15 @@ const STORAGE_KEY = "salad_khatora_sample_dismissed";
 const WHATSAPP_NUMBER = "917660005766";
 
 export function FreeSamplePopup() {
+  const { actor } = useActor();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; mobile?: string }>({});
+  const [backendError, setBackendError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     const dismissed = localStorage.getItem(STORAGE_KEY);
     if (!dismissed) {
@@ -25,21 +31,42 @@ export function FreeSamplePopup() {
     setOpen(false);
   };
 
+  const validate = () => {
+    const newErrors: { name?: string; mobile?: string } = {};
+    if (!name.trim()) newErrors.name = "Name is required";
+    if (!mobile.trim()) newErrors.mobile = "Mobile number is required";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !mobile.trim()) return;
+    setBackendError("");
+    if (!validate()) return;
 
-    const msg = encodeURIComponent(
-      `Hi! I'm ${name} (${mobile}). I'd like to claim my FREE sample salad from Salad Khatora!`,
-    );
-    window.open(
-      `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
-    setSubmitted(true);
-    localStorage.setItem(STORAGE_KEY, "1");
-    setTimeout(() => setOpen(false), 2000);
+    setLoading(true);
+    try {
+      if (actor) {
+        await actor.createLead(name.trim(), mobile.trim());
+      }
+      // Open WhatsApp regardless of lead save
+      const msg = encodeURIComponent(
+        `Hi! I'm ${name} (${mobile}). I'd like to claim my FREE sample salad from Salad Khatora!`,
+      );
+      window.open(
+        `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      setSubmitted(true);
+      localStorage.setItem(STORAGE_KEY, "1");
+      setTimeout(() => setOpen(false), 3000);
+    } catch (err) {
+      console.error("Failed to save lead:", err);
+      setBackendError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!open) return null;
@@ -84,7 +111,7 @@ export function FreeSamplePopup() {
           <div className="px-6 py-8 text-center">
             <div className="text-4xl mb-3">🎉</div>
             <p className="text-green-700 font-semibold text-lg">
-              You're all set!
+              Thank you! We will contact you soon.
             </p>
             <p className="text-gray-500 text-sm mt-1">
               We'll send your free sample details on WhatsApp.
@@ -92,6 +119,11 @@ export function FreeSamplePopup() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            {backendError && (
+              <p className="text-red-500 text-sm text-center bg-red-50 rounded-lg px-3 py-2">
+                {backendError}
+              </p>
+            )}
             <div className="space-y-1.5">
               <Label
                 htmlFor="sample-name"
@@ -103,9 +135,15 @@ export function FreeSamplePopup() {
                 id="sample-name"
                 placeholder="Enter your name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name)
+                    setErrors((prev) => ({ ...prev, name: undefined }));
+                }}
               />
+              {errors.name && (
+                <p className="text-red-500 text-xs">{errors.name}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label
@@ -119,15 +157,22 @@ export function FreeSamplePopup() {
                 placeholder="Enter your mobile number"
                 type="tel"
                 value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                required
+                onChange={(e) => {
+                  setMobile(e.target.value);
+                  if (errors.mobile)
+                    setErrors((prev) => ({ ...prev, mobile: undefined }));
+                }}
               />
+              {errors.mobile && (
+                <p className="text-red-500 text-xs">{errors.mobile}</p>
+              )}
             </div>
             <Button
               type="submit"
+              disabled={loading}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-xl"
             >
-              Claim Free Sample via WhatsApp
+              {loading ? "Submitting..." : "Claim Free Sample via WhatsApp"}
             </Button>
             <p className="text-center text-xs text-gray-400">
               We'll contact you on WhatsApp with details.

@@ -265,6 +265,9 @@ export interface backendInterface {
     deleteCoupon(id: bigint): Promise<void>;
     toggleCoupon(id: bigint, isActive: boolean): Promise<void>;
     validateCoupon(code: string): Promise<Coupon>;
+    createLead(name: string, mobile: string): Promise<bigint>;
+    getLeads(): Promise<Array<{ id: bigint; name: string; mobile: string; date: bigint; status: string }>>;
+    updateLeadStatus(id: bigint, status: string): Promise<boolean>;
 }
 import type { DeliveryType as _DeliveryType, Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, PlanType as _PlanType, Subscription as _Subscription, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
