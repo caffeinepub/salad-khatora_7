@@ -99,15 +99,6 @@ import {
   Variant_active_expired,
 } from "../backend";
 
-const MENU_ITEMS = [
-  "Caesar Salad",
-  "Garden Fresh",
-  "Greek Salad",
-  "Mango Tango",
-  "Protein Bowl",
-  "Quinoa Delight",
-];
-
 function formatDate(ts: bigint) {
   return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -1708,12 +1699,6 @@ function InventoryTab() {
   const [updateQty, setUpdateQty] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
 
-  // Link ingredient form
-  const [linkIngId, setLinkIngId] = useState("");
-  const [linkMenuItem, setLinkMenuItem] = useState("");
-  const [linkQtyPerOrder, setLinkQtyPerOrder] = useState("");
-  const [linkLoading, setLinkLoading] = useState(false);
-
   const refreshInventory = async () => {
     if (!actor) return;
     const [all, low] = await Promise.all([
@@ -1783,27 +1768,6 @@ function InventoryTab() {
       toast.error("Failed to update stock");
     } finally {
       setUpdateLoading(false);
-    }
-  };
-
-  const handleLinkIngredient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!actor || !linkIngId || !linkMenuItem || !linkQtyPerOrder) return;
-    setLinkLoading(true);
-    try {
-      await actor.linkIngredientToMenuItem(
-        linkMenuItem,
-        BigInt(Number(linkIngId)),
-        BigInt(Number(linkQtyPerOrder)),
-      );
-      setLinkIngId("");
-      setLinkMenuItem("");
-      setLinkQtyPerOrder("");
-      toast.success("Ingredient linked to menu item");
-    } catch {
-      toast.error("Failed to link ingredient");
-    } finally {
-      setLinkLoading(false);
     }
   };
 
@@ -2021,83 +1985,6 @@ function InventoryTab() {
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
                 ) : null}
                 Update Stock
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Link to menu item */}
-        <Card className="border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold">
-              Link to Menu Item
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLinkIngredient} className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Ingredient</Label>
-                <Select value={linkIngId} onValueChange={setLinkIngId}>
-                  <SelectTrigger
-                    className="h-8 text-sm"
-                    data-ocid="admin.inventory.select"
-                  >
-                    <SelectValue placeholder="Select ingredient" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ingredients.map((ing) => (
-                      <SelectItem
-                        key={Number(ing.id)}
-                        value={String(Number(ing.id))}
-                      >
-                        {ing.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Menu Item</Label>
-                <Select value={linkMenuItem} onValueChange={setLinkMenuItem}>
-                  <SelectTrigger
-                    className="h-8 text-sm"
-                    data-ocid="admin.inventory.select"
-                  >
-                    <SelectValue placeholder="Select salad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MENU_ITEMS.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Qty per Order</Label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 100"
-                  value={linkQtyPerOrder}
-                  onChange={(e) => setLinkQtyPerOrder(e.target.value)}
-                  className="h-8 text-sm"
-                  min="1"
-                  data-ocid="admin.inventory.input"
-                />
-              </div>
-              <Button
-                type="submit"
-                size="sm"
-                variant="outline"
-                className="w-full rounded-lg border-primary text-primary hover:bg-accent"
-                disabled={linkLoading}
-                data-ocid="admin.inventory.submit_button"
-              >
-                {linkLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                ) : null}
-                Link Ingredient
               </Button>
             </form>
           </CardContent>

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 
 const STAR_POSITIONS = [0, 1, 2, 3, 4];
+const MAX_REVIEWS = 5;
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -24,6 +25,52 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
+function AverageRating({ reviews }: { reviews: Review[] }) {
+  const avg =
+    reviews.reduce((sum, r) => sum + Number(r.rating), 0) / reviews.length;
+  const display = avg.toFixed(1);
+  const filled = Math.round(avg);
+
+  return (
+    <motion.div
+      className="flex justify-center mb-10"
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="bg-white border border-border rounded-2xl px-8 py-5 shadow-card flex flex-col items-center gap-1">
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+          Average Rating
+        </p>
+        <div className="flex items-end gap-2">
+          <span className="text-5xl font-bold text-primary leading-none">
+            {display}
+          </span>
+          <span className="text-lg font-medium text-muted-foreground mb-1">
+            /5
+          </span>
+        </div>
+        <div className="flex gap-0.5 mt-1">
+          {STAR_POSITIONS.map((pos) => (
+            <span
+              key={pos}
+              className={`text-xl leading-none ${
+                pos < filled ? "text-amber-400" : "text-gray-200"
+              }`}
+            >
+              ★
+            </span>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Based on {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function ReviewsCarousel() {
   const { actor, isFetching } = useActor();
   const [current, setCurrent] = useState(0);
@@ -34,7 +81,12 @@ export default function ReviewsCarousel() {
     queryFn: async () => {
       if (!actor) return [];
       try {
-        return await actor.getApprovedReviews();
+        const all = await actor.getApprovedReviews();
+        // Sort by latest first, then put top reviews (rating >= 4) first
+        const sorted = [...all].sort((a, b) => Number(b.date) - Number(a.date));
+        const top = sorted.filter((r) => Number(r.rating) >= 4);
+        const rest = sorted.filter((r) => Number(r.rating) < 4);
+        return [...top, ...rest].slice(0, MAX_REVIEWS);
       } catch {
         return [];
       }
@@ -59,16 +111,18 @@ export default function ReviewsCarousel() {
     return () => clearInterval(timer);
   }, [reviews.length, goNext]);
 
+  // Hide section if no approved reviews
   if (reviews.length === 0) return null;
 
   const review = reviews[current];
+  const isTopReview = Number(review.rating) >= 4;
 
   return (
     <section className="py-16 md:py-20 bg-white" data-ocid="reviews.section">
       <div className="max-w-4xl mx-auto px-4">
         {/* Heading */}
         <motion.div
-          className="text-center mb-12"
+          className="text-center mb-8"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -84,6 +138,9 @@ export default function ReviewsCarousel() {
             Real reviews from real customers who love their healthy journey
           </p>
         </motion.div>
+
+        {/* Average Rating */}
+        <AverageRating reviews={reviews} />
 
         {/* Carousel */}
         <div className="relative flex items-center gap-3 md:gap-6">
@@ -112,12 +169,23 @@ export default function ReviewsCarousel() {
                 className="bg-card rounded-3xl p-8 shadow-card border border-border relative"
                 data-ocid="reviews.card"
               >
+                {/* Top Review badge */}
+                {isTopReview && (
+                  <div className="absolute top-5 left-8">
+                    <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 text-xs font-semibold px-2.5 py-1 rounded-full">
+                      🏆 Top Review
+                    </span>
+                  </div>
+                )}
+
                 {/* Quote decoration */}
                 <div className="absolute top-6 right-8 opacity-10">
                   <Quote className="w-16 h-16 text-primary fill-primary" />
                 </div>
 
-                <div className="flex flex-col gap-4">
+                <div
+                  className={`flex flex-col gap-4 ${isTopReview ? "pt-8" : ""}`}
+                >
                   {/* Stars */}
                   <StarRating rating={Number(review.rating)} />
 
