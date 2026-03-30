@@ -5,6 +5,8 @@ import Time "mo:core/Time";
 import List "mo:core/List";
 import Array "mo:core/Array";
 import Runtime "mo:core/Runtime";
+import Text "mo:core/Text";
+import Random "mo:core/Random";
 
 // Mixins must be imported directly from their file path
 import MixinAuthorization "authorization/MixinAuthorization";
@@ -139,6 +141,123 @@ actor {
 
   let leads = Map.empty<Nat, Lead>();
   var nextLeadId = 0;
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ─── Reviews ─────────────────────────────────────────────────────────────────
+  public type ReviewStatus = {
+    #pending;
+    #approved;
+    #rejected;
+  };
+
+  public type Review = {
+    id : Text;
+    userName : Text;
+    rating : Nat;
+    comment : Text;
+    date : Int;
+    status : ReviewStatus;
+  };
+
+  public type Result<T, E> = {
+    #ok : T;
+    #err : E;
+  };
+
+  let reviews = Map.empty<Text, Review>();
+  var reviewIdCounter : Nat = 0;
+
+  // Helper function to generate UUID-like ID
+  func generateReviewId() : Text {
+    reviewIdCounter += 1;
+    let timestamp = Time.now();
+    reviewIdCounter.toText().concat("-".concat(Int.toText(timestamp)))
+  };
+
+  // createReview: authenticated users only (not anonymous)
+  public shared ({ caller }) func createReview(userName : Text, rating : Nat, comment : Text) : async Result<Review, Text> {
+    if (caller.isAnonymous()) {
+      return #err("Unauthorized: Must be authenticated to create a review");
+    };
+
+    // Validate rating is 1-5
+    if (rating < 1 or rating > 5) {
+      return #err("Invalid rating: must be between 1 and 5");
+    };
+
+    let id = generateReviewId();
+    let review : Review = {
+      id;
+      userName;
+      rating;
+      comment;
+      date = Time.now();
+      status = #pending;
+    };
+
+    reviews.add(id, review);
+    #ok(review)
+  };
+
+  // getApprovedReviews: public query, no auth required
+  public query func getApprovedReviews() : async [Review] {
+    reviews.values().toArray().filter(func(r : Review) : Bool {
+      switch (r.status) {
+        case (#approved) { true };
+        case (_) { false };
+      }
+    })
+  };
+
+  // getAllReviews: admin-only
+  public query ({ caller }) func getAllReviews() : async [Review] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all reviews");
+    };
+    reviews.values().toArray()
+  };
+
+  // updateReviewStatus: admin-only
+  public shared ({ caller }) func updateReviewStatus(id : Text, status : ReviewStatus) : async Result<Review, Text> {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update review status");
+    };
+
+    switch (reviews.get(id)) {
+      case (?review) {
+        let updatedReview : Review = {
+          id = review.id;
+          userName = review.userName;
+          rating = review.rating;
+          comment = review.comment;
+          date = review.date;
+          status;
+        };
+        reviews.add(id, updatedReview);
+        #ok(updatedReview)
+      };
+      case (null) {
+        #err("Review not found")
+      };
+    }
+  };
+
+  // deleteReview: admin-only
+  public shared ({ caller }) func deleteReview(id : Text) : async Result<(), Text> {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete reviews");
+    };
+
+    switch (reviews.get(id)) {
+      case (?_) {
+        reviews.remove(id);
+        #ok(())
+      };
+      case (null) {
+        #err("Review not found")
+      };
+    }
+  };
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Migrate data from legacy menuItems (V1, no tags) into menuItemsV2 (with tags)

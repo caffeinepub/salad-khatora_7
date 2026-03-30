@@ -84,15 +84,16 @@ import {
   type Coupon,
   type DeliveryRecord,
   DeliveryStatus,
-  type DiscountType,
+  DiscountType,
   type Ingredient,
+  type LeadStatus,
   type MenuItem,
   type Order,
   OrderStatus,
+  PlanType,
   type Rider,
   type Subscription,
   Variant_active_expired,
-  Variant_monthly_weekly,
 } from "../backend";
 
 const MENU_ITEMS = [
@@ -800,7 +801,7 @@ function UserDetailSheet({
 
   const getSubExpiry = () => {
     if (!userSub) return null;
-    const days = userSub.planType === Variant_monthly_weekly.monthly ? 30 : 7;
+    const days = userSub.planType === PlanType.monthly ? 30 : 7;
     const expiry =
       Number(userSub.startDate) / 1_000_000 + days * 24 * 60 * 60 * 1000;
     return new Date(expiry).toLocaleDateString("en-IN", {
@@ -969,7 +970,7 @@ function UserDetailSheet({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Plan</span>
                     <Badge className="bg-primary/10 text-primary border-primary/20 capitalize">
-                      {userSub.planType === Variant_monthly_weekly.monthly
+                      {userSub.planType === PlanType.monthly
                         ? "Monthly"
                         : "Weekly"}
                     </Badge>
@@ -1637,9 +1638,7 @@ function SubscriptionsTab() {
                   variant="outline"
                   className="text-xs capitalize border-primary/30 text-primary"
                 >
-                  {sub.planType === Variant_monthly_weekly.monthly
-                    ? "Monthly"
-                    : "Weekly"}
+                  {sub.planType === PlanType.monthly ? "Monthly" : "Weekly"}
                 </Badge>
               </TableCell>
               <TableCell className="text-xs">
@@ -2578,8 +2577,8 @@ function OffersTab() {
     try {
       const dt: DiscountType =
         discountType === "percentage"
-          ? { __kind__: "percentage", percentage: null }
-          : { __kind__: "flat", flat: null };
+          ? DiscountType.percentage
+          : DiscountType.flat;
       const expiry = BigInt(Date.parse(`${expiryDate}T23:59:59`) * 1_000_000);
       await actor.createCoupon(
         code.toUpperCase(),
@@ -2764,10 +2763,10 @@ function OffersTab() {
                       {c.code}
                     </TableCell>
                     <TableCell className="capitalize">
-                      {c.discountType.__kind__ === "percentage" ? "%" : "₹"}
+                      {c.discountType === DiscountType.percentage ? "%" : "₹"}
                     </TableCell>
                     <TableCell>
-                      {c.discountType.__kind__ === "percentage"
+                      {c.discountType === DiscountType.percentage
                         ? `${c.discountValue}%`
                         : `₹${c.discountValue}`}
                     </TableCell>
@@ -3058,7 +3057,7 @@ function DeliveryTab() {
         address: newDelivery.address,
         deliveryTime: dtNs,
         status: DeliveryStatus.preparing,
-        riderId: null,
+        riderId: undefined,
         notes: newDelivery.notes,
       };
       setDeliveries((prev) => [newRec, ...prev]);
@@ -3751,10 +3750,7 @@ function LeadsTab() {
     if (!actor) return;
     setUpdating(id);
     try {
-      await actor.updateLeadStatus(
-        id,
-        newStatus as "new_" | "contacted" | "converted",
-      );
+      await actor.updateLeadStatus(id, newStatus as LeadStatus);
       await loadLeads();
       toast.success("Lead status updated");
     } catch (_e) {
@@ -3929,6 +3925,7 @@ export default function AdminPanel() {
   const { actor, isFetching } = useActor();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState("analytics");
 
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
@@ -3997,7 +3994,12 @@ export default function AdminPanel() {
           </p>
         </div>
 
-        <Tabs defaultValue="analytics" className="w-full" data-ocid="admin.tab">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+          data-ocid="admin.tab"
+        >
           <TabsList className="w-full justify-start mb-6 bg-muted/60 rounded-xl p-1 h-auto flex-wrap gap-1">
             <TabsTrigger
               value="analytics"
@@ -4072,31 +4074,31 @@ export default function AdminPanel() {
           </TabsList>
 
           <TabsContent value="analytics">
-            <AnalyticsTab />
+            {activeTab === "analytics" && <AnalyticsTab />}
           </TabsContent>
           <TabsContent value="orders">
-            <OrdersTab />
+            {activeTab === "orders" && <OrdersTab />}
           </TabsContent>
           <TabsContent value="users">
-            <UsersTab />
+            {activeTab === "users" && <UsersTab />}
           </TabsContent>
           <TabsContent value="subscriptions">
-            <SubscriptionsTab />
+            {activeTab === "subscriptions" && <SubscriptionsTab />}
           </TabsContent>
           <TabsContent value="inventory">
-            <InventoryTab />
+            {activeTab === "inventory" && <InventoryTab />}
           </TabsContent>
           <TabsContent value="menu">
-            <MenuManagementTab />
+            {activeTab === "menu" && <MenuManagementTab />}
           </TabsContent>
           <TabsContent value="offers">
-            <OffersTab />
+            {activeTab === "offers" && <OffersTab />}
           </TabsContent>
           <TabsContent value="delivery">
-            <DeliveryTab />
+            {activeTab === "delivery" && <DeliveryTab />}
           </TabsContent>
           <TabsContent value="leads">
-            <LeadsTab />
+            {activeTab === "leads" && <LeadsTab />}
           </TabsContent>
         </Tabs>
       </main>

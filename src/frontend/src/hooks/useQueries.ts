@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DeliveryType, OrderItem, UserProfile } from "../backend";
-import type { Variant_monthly_weekly } from "../backend";
+import type { PlanType } from "../backend";
 import { useActor } from "./useActor";
 
 const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 30000);
@@ -108,7 +108,7 @@ export function useCreateSubscription() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (planType: Variant_monthly_weekly) => {
+    mutationFn: async (planType: PlanType) => {
       if (!actor) throw new Error("Not authenticated");
       return actor.createSubscription(planType);
     },

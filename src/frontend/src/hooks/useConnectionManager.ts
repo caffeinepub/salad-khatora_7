@@ -8,6 +8,9 @@ interface ConnectionManagerResult {
   connectionStatus: ConnectionStatus;
 }
 
+// Require 3 consecutive failures before marking the app as offline
+const FAILURE_THRESHOLD = 3;
+
 export function useConnectionManager(
   actor: backendInterface | null,
   onReconnect: () => void,
@@ -16,7 +19,7 @@ export function useConnectionManager(
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("online");
 
-  const stateRef = useRef({ isOnline: true });
+  const stateRef = useRef({ isOnline: true, failureCount: 0 });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const actorRef = useRef(actor);
   const onReconnectRef = useRef(onReconnect);
@@ -24,40 +27,41 @@ export function useConnectionManager(
   useEffect(() => {
     actorRef.current = actor;
   }, [actor]);
-
   useEffect(() => {
     onReconnectRef.current = onReconnect;
   }, [onReconnect]);
 
-  const scheduleNext = useCallback(() => {
+  const scheduleNext = useCallback((delay: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    const delay = stateRef.current.isOnline ? 15000 : 5000;
     intervalRef.current = setInterval(async () => {
       if (!actorRef.current) return;
       try {
-        await actorRef.current.isCallerAdmin();
+        await actorRef.current.hasAdminBeenClaimed();
+        stateRef.current.failureCount = 0;
         if (!stateRef.current.isOnline) {
           stateRef.current.isOnline = true;
           setIsOnline(true);
           setConnectionStatus("online");
           onReconnectRef.current();
-          // Reschedule at slow interval now that we're back online
-          scheduleNext();
+          scheduleNext(30000);
         }
       } catch {
-        if (stateRef.current.isOnline) {
+        stateRef.current.failureCount++;
+        if (
+          stateRef.current.isOnline &&
+          stateRef.current.failureCount >= FAILURE_THRESHOLD
+        ) {
           stateRef.current.isOnline = false;
           setIsOnline(false);
           setConnectionStatus("reconnecting");
-          // Reschedule at fast retry interval
-          scheduleNext();
+          scheduleNext(10000);
         }
       }
     }, delay);
   }, []);
 
   useEffect(() => {
-    scheduleNext();
+    scheduleNext(30000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -65,21 +69,17 @@ export function useConnectionManager(
 
   useEffect(() => {
     const handleOnline = () => {
-      if (!stateRef.current.isOnline) {
-        setConnectionStatus("reconnecting");
-      }
+      if (!stateRef.current.isOnline) setConnectionStatus("reconnecting");
     };
-
     const handleOffline = () => {
       stateRef.current.isOnline = false;
+      stateRef.current.failureCount = 0;
       setIsOnline(false);
       setConnectionStatus("offline");
-      scheduleNext();
+      scheduleNext(10000);
     };
-
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

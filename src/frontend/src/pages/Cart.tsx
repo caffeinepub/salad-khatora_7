@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
+import { DiscountType } from "../backend";
 import type { Coupon } from "../backend";
 import { usePlaceOrder } from "../hooks/useQueries";
 
@@ -36,7 +37,7 @@ export default function Cart() {
   const canOrder = delivery !== "" && isScheduleValid && items.length > 0;
 
   const discount = appliedCoupon
-    ? appliedCoupon.discountType.__kind__ === "percentage"
+    ? appliedCoupon.discountType === DiscountType.percentage
       ? Math.round((cartTotal * Number(appliedCoupon.discountValue)) / 100)
       : Math.min(Number(appliedCoupon.discountValue), cartTotal)
     : 0;

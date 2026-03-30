@@ -1,26 +1,27 @@
 # Salad Khatora
 
 ## Current State
-Full-stack ICP app with Motoko backend. Leads feature was previously removed entirely from both frontend and backend for stability.
+The app has a fully functional backend with leads, menu, orders, users, subscriptions, delivery, coupons, and analytics systems. No reviews system exists yet.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `leads` collection in backend persistent storage
-- `Lead` type with fields: id (Text), name (Text), mobile (Text), date (Int), status (LeadStatus variant: new | contacted | converted)
-- `LeadStatus` variant type
-- `createLead(name: Text, mobile: Text)` — generates unique ID, timestamps with current time, stores with status #new
-- `getLeads()` — returns all leads, no auth restriction (admin callable)
-- `updateLeadStatus(id: Text, status: LeadStatus)` — updates status for a lead by ID
+- `Review` type with fields: id, userName, rating (1–5), comment, date, status (pending/approved/rejected)
+- `ReviewStatus` variant: `#pending`, `#approved`, `#rejected`
+- Stable `reviews` HashMap for persistent storage
+- `createReview(userName, rating, comment)` — creates review with auto-generated id, current timestamp, default status = pending
+- `getApprovedReviews()` — public query returning all reviews with status = approved
+- `getAllReviews()` — admin-only query returning all reviews
+- `updateReviewStatus(id, status)` — admin update to change review status
+- `deleteReview(id)` — admin delete a review by id
 
 ### Modify
-- `main.mo` — add leads stable storage, Lead type, LeadStatus type, and the three functions
+- `main.mo` — add reviews collection and all five functions
+- `backend.d.ts` — add Review type and all five function signatures
 
 ### Remove
 - Nothing
 
 ## Implementation Plan
-1. Add `LeadStatus` variant and `Lead` record type to backend
-2. Add `stable var leads : [(Text, Lead)]` storage using a HashMap backed by stable array
-3. Implement `createLead`, `getLeads`, `updateLeadStatus`
-4. No frontend changes — backend only
+1. Generate updated Motoko backend including reviews system
+2. Update backend.d.ts with Review type and new function signatures

@@ -10,14 +10,58 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface Coupon {
+  'id' : bigint,
+  'discountValue' : bigint,
+  'expiryDate' : Time,
+  'code' : string,
+  'discountType' : DiscountType,
+  'isActive' : boolean,
+}
+export interface DeliveryRecord {
+  'id' : bigint,
+  'customerName' : string,
+  'status' : DeliveryStatus,
+  'riderId' : [] | [bigint],
+  'deliveryTime' : Time,
+  'orderId' : bigint,
+  'address' : string,
+  'notes' : string,
+}
+export type DeliveryStatus = { 'preparing' : null } |
+  { 'outForDelivery' : null } |
+  { 'delivered' : null } |
+  { 'ready' : null };
 export type DeliveryType = { 'scheduled' : Time } |
   { 'instant' : null };
+export type DiscountType = { 'flat' : null } |
+  { 'percentage' : null };
 export interface Ingredient {
   'id' : bigint,
   'lowStockThreshold' : bigint,
   'quantityInStock' : bigint,
   'name' : string,
   'unit' : string,
+}
+export interface Lead {
+  'id' : bigint,
+  'status' : LeadStatus,
+  'date' : Time,
+  'name' : string,
+  'mobile' : string,
+}
+export type LeadStatus = { 'new' : null } |
+  { 'contacted' : null } |
+  { 'converted' : null };
+export interface MenuItem {
+  'id' : bigint,
+  'calories' : bigint,
+  'name' : string,
+  'tags' : Array<string>,
+  'enabled' : boolean,
+  'price' : bigint,
+  'ingredients' : Array<string>,
+  'protein' : bigint,
 }
 export interface MenuItemIngredient {
   'menuItemName' : string,
@@ -44,6 +88,27 @@ export type OrderStatus = { 'pending' : null } |
   { 'confirmed' : null };
 export type PlanType = { 'monthly' : null } |
   { 'weekly' : null };
+export type Result = { 'ok' : Review } |
+  { 'err' : string };
+export type Result_1 = { 'ok' : null } |
+  { 'err' : string };
+export interface Review {
+  'id' : string,
+  'status' : ReviewStatus,
+  'userName' : string,
+  'date' : bigint,
+  'comment' : string,
+  'rating' : bigint,
+}
+export type ReviewStatus = { 'pending' : null } |
+  { 'approved' : null } |
+  { 'rejected' : null };
+export interface Rider {
+  'id' : bigint,
+  'area' : string,
+  'name' : string,
+  'mobile' : string,
+}
 export interface Subscription {
   'status' : { 'active' : null } |
     { 'expired' : null },
@@ -54,6 +119,8 @@ export interface Subscription {
   'startDate' : Time,
 }
 export type Time = bigint;
+export interface UserMeta { 'notes' : Array<UserNote>, 'isVip' : boolean }
+export interface UserNote { 'id' : bigint, 'createdAt' : Time, 'text' : string }
 export interface UserProfile {
   'age' : bigint,
   'heightCm' : bigint,
@@ -68,45 +135,56 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
-export interface MenuItem {
-  'id' : bigint,
-  'name' : string,
-  'price' : bigint,
-  'calories' : bigint,
-  'protein' : bigint,
-  'ingredients' : Array<string>,
-  'tags' : Array<string>,
-  'enabled' : boolean,
-}
-
-export type LeadStatus = { 'new_' : null } | { 'contacted' : null } | { 'converted' : null };
-export interface Lead {
-  'id' : bigint,
-  'name' : string,
-  'mobile' : string,
-  'date' : bigint,
-  'status' : LeadStatus,
-}
-
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
+  'addMenuItem' : ActorMethod<
+    [string, bigint, bigint, bigint, Array<string>, Array<string>],
+    bigint
+  >,
+  'addRider' : ActorMethod<[string, string, string], bigint>,
+  'addUserNote' : ActorMethod<[Principal, string], bigint>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'assignRider' : ActorMethod<[bigint, bigint], undefined>,
+  'bulkAssignRider' : ActorMethod<[Array<bigint>, bigint], undefined>,
+  'claimFirstAdminRole' : ActorMethod<[], undefined>,
+  'createCoupon' : ActorMethod<[string, DiscountType, bigint, Time], bigint>,
+  'createDelivery' : ActorMethod<
+    [bigint, string, string, Time, string],
+    bigint
+  >,
+  'createLead' : ActorMethod<[string, string], bigint>,
+  'createReview' : ActorMethod<[string, bigint, string], Result>,
   'createSubscription' : ActorMethod<[PlanType], undefined>,
+  'deleteCoupon' : ActorMethod<[bigint], undefined>,
+  'deleteMenuItem' : ActorMethod<[bigint], undefined>,
+  'deleteReview' : ActorMethod<[string], Result_1>,
+  'deleteRider' : ActorMethod<[bigint], undefined>,
+  'deleteUser' : ActorMethod<[Principal], undefined>,
+  'deleteUserNote' : ActorMethod<[Principal, bigint], undefined>,
+  'getAllCoupons' : ActorMethod<[], Array<Coupon>>,
+  'getAllDeliveries' : ActorMethod<[], Array<DeliveryRecord>>,
   'getAllIngredients' : ActorMethod<[], Array<Ingredient>>,
+  'getAllMenuItems' : ActorMethod<[], Array<MenuItem>>,
   'getAllOrders' : ActorMethod<[], Array<Order>>,
+  'getAllReviews' : ActorMethod<[], Array<Review>>,
+  'getAllRiders' : ActorMethod<[], Array<Rider>>,
   'getAllSubscriptions' : ActorMethod<[], Array<Subscription>>,
   'getAllUsers' : ActorMethod<
     [],
     Array<{ 'principal' : Principal, 'profile' : UserProfile }>
   >,
+  'getApprovedReviews' : ActorMethod<[], Array<Review>>,
   'getCallerSubscription' : ActorMethod<[], [] | [Subscription]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getLeads' : ActorMethod<[], Array<Lead>>,
   'getLowStockIngredients' : ActorMethod<[], Array<Ingredient>>,
   'getMenuItemIngredients' : ActorMethod<[string], Array<MenuItemIngredient>>,
+  'getUserMeta' : ActorMethod<[Principal], UserMeta>,
   'getUserOrders' : ActorMethod<[], Array<Order>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'hasAdminBeenClaimed' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'linkIngredientToMenuItem' : ActorMethod<[string, bigint, bigint], undefined>,
   'placeOrder' : ActorMethod<
@@ -116,72 +194,28 @@ export interface _SERVICE {
   'registerUser' : ActorMethod<[UserProfile], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'saveUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setUserVip' : ActorMethod<[Principal, boolean], undefined>,
+  'toggleCoupon' : ActorMethod<[bigint, boolean], undefined>,
+  'toggleMenuItem' : ActorMethod<[bigint, boolean], undefined>,
+  'updateDeliveryNote' : ActorMethod<[bigint, string], undefined>,
+  'updateDeliveryStatus' : ActorMethod<[bigint, DeliveryStatus], undefined>,
   'updateIngredientStock' : ActorMethod<[bigint, bigint], undefined>,
+  'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
+  'updateMenuItem' : ActorMethod<
+    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>],
+    undefined
+  >,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
+  'updateReviewStatus' : ActorMethod<[string, ReviewStatus], Result>,
+  'updateRider' : ActorMethod<[bigint, string, string, string], undefined>,
   'updateSubscriptionStatus' : ActorMethod<
     [Principal, { 'active' : null } | { 'expired' : null }],
     undefined
   >,
   'updateUserProfile' : ActorMethod<[UserProfile], undefined>,
-  'claimFirstAdminRole' : ActorMethod<[], undefined>,
-  'hasAdminBeenClaimed' : ActorMethod<[], boolean>,
-  'getAllMenuItems' : ActorMethod<[], Array<MenuItem>>,
-  'addMenuItem' : ActorMethod<[string, bigint, bigint, bigint, Array<string>, Array<string>], bigint>,
-  'updateMenuItem' : ActorMethod<[bigint, string, bigint, bigint, bigint, Array<string>, Array<string>], undefined>,
-  'deleteMenuItem' : ActorMethod<[bigint], undefined>,
-  'toggleMenuItem' : ActorMethod<[bigint, boolean], undefined>,
-  'createCoupon' : ActorMethod<[string, DiscountType, bigint, bigint], bigint>,
-  'getAllCoupons' : ActorMethod<[], Array<Coupon>>,
-  'deleteCoupon' : ActorMethod<[bigint], undefined>,
-  'toggleCoupon' : ActorMethod<[bigint, boolean], undefined>,
-  'validateCoupon' : ActorMethod<[string], Coupon>,
-  'addRider' : ActorMethod<[string, string, string], bigint>,
-  'updateRider' : ActorMethod<[bigint, string, string, string], undefined>,
-  'deleteRider' : ActorMethod<[bigint], undefined>,
-  'getAllRiders' : ActorMethod<[], Array<Rider>>,
-  'createDelivery' : ActorMethod<[bigint, string, string, bigint, string], bigint>,
-  'updateDeliveryStatus' : ActorMethod<[bigint, DeliveryStatus], undefined>,
-  'assignRider' : ActorMethod<[bigint, bigint], undefined>,
-  'bulkAssignRider' : ActorMethod<[Array<bigint>, bigint], undefined>,
-  'updateDeliveryNote' : ActorMethod<[bigint, string], undefined>,
-  'getAllDeliveries' : ActorMethod<[], Array<DeliveryRecord>>,
-  'setUserVip' : ActorMethod<[Principal, boolean], undefined>,
-  'addUserNote' : ActorMethod<[Principal, string], bigint>,
-  'deleteUserNote' : ActorMethod<[Principal, bigint], undefined>,
-  'getUserMeta' : ActorMethod<[Principal], UserMeta>,
-  'deleteUser' : ActorMethod<[Principal], undefined>,
   'updateUserProfileByAdmin' : ActorMethod<[Principal, UserProfile], undefined>,
-  'createLead' : ActorMethod<[string, string], bigint>,
-  'getLeads' : ActorMethod<[], Array<Lead>>,
-  'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
+  'validateCoupon' : ActorMethod<[string], Coupon>,
 }
-
-export type DiscountType = { 'percentage' : null } | { 'flat' : null };
-export interface Coupon {
-  'id' : bigint,
-  'code' : string,
-  'discountType' : DiscountType,
-  'discountValue' : bigint,
-  'expiryDate' : bigint,
-  'isActive' : boolean,
-}
-
-export type DeliveryStatus = { 'preparing' : null } | { 'ready' : null } | { 'outForDelivery' : null } | { 'delivered' : null };
-export interface Rider { 'id' : bigint, 'name' : string, 'mobile' : string, 'area' : string }
-export interface UserNote { 'id': bigint, 'text': string, 'createdAt': bigint }
-export interface UserMeta { 'isVip': boolean, 'notes': Array<UserNote> }
-
-export interface DeliveryRecord {
-  'id' : bigint,
-  'orderId' : bigint,
-  'customerName' : string,
-  'address' : string,
-  'deliveryTime' : bigint,
-  'status' : DeliveryStatus,
-  'riderId' : [] | [bigint],
-  'notes' : string,
-}
-
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
 export declare const idlFactory: IDL.InterfaceFactory;

@@ -8,7 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Check, Leaf, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
-import { Variant_active_expired, Variant_monthly_weekly } from "../backend";
+import { PlanType, Variant_active_expired } from "../backend";
 import {
   useCreateSubscription,
   useUserSubscription,
@@ -17,7 +17,7 @@ import {
 const plans = [
   {
     id: "weekly" as const,
-    planType: Variant_monthly_weekly.weekly,
+    planType: PlanType.weekly,
     name: "Weekly Plan",
     tagline: "Taste the freshness",
     price: "₹599",
@@ -34,7 +34,7 @@ const plans = [
   },
   {
     id: "monthly" as const,
-    planType: Variant_monthly_weekly.monthly,
+    planType: PlanType.monthly,
     name: "Monthly Plan",
     tagline: "Maximum value, maximum health",
     price: "₹1,999",
@@ -66,10 +66,7 @@ export default function Subscription() {
   const { data: subscription, isLoading: subLoading } = useUserSubscription();
   const createSub = useCreateSubscription();
 
-  const handleSubscribe = async (
-    planType: Variant_monthly_weekly,
-    planName: string,
-  ) => {
+  const handleSubscribe = async (planType: PlanType, planName: string) => {
     if (!isAuthenticated) {
       toast.error("Please login to subscribe");
       navigate({ to: "/login" });
@@ -122,7 +119,7 @@ export default function Subscription() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-bold text-foreground">
-                    {subscription.planType === Variant_monthly_weekly.monthly
+                    {subscription.planType === PlanType.monthly
                       ? "Monthly Plan"
                       : "Weekly Plan"}
                   </p>

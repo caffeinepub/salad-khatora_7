@@ -8,11 +8,7 @@ import { Loader2, Package, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { useAuth } from "../auth-context";
-import {
-  OrderStatus,
-  Variant_active_expired,
-  Variant_monthly_weekly,
-} from "../backend";
+import { OrderStatus, PlanType, Variant_active_expired } from "../backend";
 import { useUserOrders, useUserSubscription } from "../hooks/useQueries";
 
 function formatDate(ts: bigint) {
@@ -104,7 +100,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="font-semibold text-foreground text-base">
-                    {subscription.planType === Variant_monthly_weekly.monthly
+                    {subscription.planType === PlanType.monthly
                       ? "Monthly Plan"
                       : "Weekly Plan"}
                   </p>
