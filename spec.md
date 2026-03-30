@@ -1,27 +1,23 @@
 # Salad Khatora
 
 ## Current State
-The app has a fully functional backend with leads, menu, orders, users, subscriptions, delivery, coupons, and analytics systems. No reviews system exists yet.
+Reviews backend is deployed with `createReview(userName, rating, comment)`, `getApprovedReviews()`, etc. No review UI exists yet.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `Review` type with fields: id, userName, rating (1–5), comment, date, status (pending/approved/rejected)
-- `ReviewStatus` variant: `#pending`, `#approved`, `#rejected`
-- Stable `reviews` HashMap for persistent storage
-- `createReview(userName, rating, comment)` — creates review with auto-generated id, current timestamp, default status = pending
-- `getApprovedReviews()` — public query returning all reviews with status = approved
-- `getAllReviews()` — admin-only query returning all reviews
-- `updateReviewStatus(id, status)` — admin update to change review status
-- `deleteReview(id)` — admin delete a review by id
+- `ReviewForm` component: form with Name (optional), star rating (1-5, required), and comment (required)
+- On submit: call `createReview()`, show success message "Thank you! Your review will be published after approval."
+- Validation: rating required, comment required
+- Error handling: catch backend failure, show error message without crashing
+- Add a "Leave a Review" section to the Home page, below the Benefits section and above the CTA Banner
 
 ### Modify
-- `main.mo` — add reviews collection and all five functions
-- `backend.d.ts` — add Review type and all five function signatures
+- `Home.tsx`: import and render `ReviewForm` section
 
 ### Remove
 - Nothing
 
 ## Implementation Plan
-1. Generate updated Motoko backend including reviews system
-2. Update backend.d.ts with Review type and new function signatures
+1. Create `src/frontend/src/components/ReviewForm.tsx` with star rating UI, name/comment inputs, validation, backend call, and success/error states
+2. Add ReviewForm section to `Home.tsx` between Benefits and CTA Banner sections

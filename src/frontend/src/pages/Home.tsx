@@ -1,5 +1,6 @@
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import ReviewForm from "@/components/ReviewForm";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle } from "lucide-react";
@@ -228,6 +229,27 @@ export default function Home() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Share Your Experience / Reviews */}
+      <section className="py-16 md:py-20 bg-white" data-ocid="home.section">
+        <div className="max-w-2xl mx-auto px-4">
+          <motion.div
+            className="text-center mb-10"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+              Share Your Experience
+            </h2>
+            <p className="text-muted-foreground">
+              We&apos;d love to hear from you
+            </p>
+          </motion.div>
+          <ReviewForm />
         </div>
       </section>
 
