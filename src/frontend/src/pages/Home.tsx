@@ -1,6 +1,7 @@
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import ReviewForm from "@/components/ReviewForm";
+import ReviewsCarousel from "@/components/ReviewsCarousel";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle } from "lucide-react";
@@ -231,6 +232,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Customer Reviews Carousel */}
+      <ReviewsCarousel />
 
       {/* Share Your Experience / Reviews */}
       <section className="py-16 md:py-20 bg-white" data-ocid="home.section">
