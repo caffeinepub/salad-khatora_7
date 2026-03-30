@@ -3863,6 +3863,19 @@ function LeadsTab() {
                       </span>
                     </div>
                     <div className="flex gap-2 flex-wrap">
+                      <a
+                        href={`https://wa.me/91${lead.mobile}?text=Hi%2C%20thanks%20for%20trying%20Salad%20Khatora%21%20Get%2010%25%20off%20on%20your%20subscription.`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-ocid="leads.whatsapp.button"
+                      >
+                        <Button
+                          size="sm"
+                          className="bg-green-500 hover:bg-green-600 text-white"
+                        >
+                          📱 Contact on WhatsApp
+                        </Button>
+                      </a>
                       {lead.status === "new_" && (
                         <Button
                           size="sm"
