@@ -64,12 +64,32 @@ export interface Order {
     totalAmount: bigint;
     items: Array<OrderItem>;
 }
+export interface SubscriptionPlan {
+    id: bigint;
+    name: string;
+    totalMeals: bigint;
+    price: bigint;
+    validityDays: bigint;
+    description: string;
+}
 export interface Subscription {
     status: Variant_active_expired;
     saladsRemaining: bigint;
     user: Principal;
-    planType: PlanType;
+    planId: bigint;
+    planName: string;
     startDate: Time;
+    expiryDate: Time;
+}
+export interface BowlSize {
+    size: string;
+    price: bigint;
+    calories: bigint;
+    protein: bigint;
+}
+export interface LinkedIngredient {
+    ingredientId: bigint;
+    quantityGrams: bigint;
 }
 export interface MenuItem {
     id: bigint;
@@ -80,6 +100,8 @@ export interface MenuItem {
     price: bigint;
     ingredients: Array<string>;
     protein: bigint;
+    sizes: Array<BowlSize>;
+    linkedIngredients: Array<LinkedIngredient>;
 }
 export interface UserNote {
     id: bigint;
@@ -177,7 +199,7 @@ export enum Variant_active_expired {
 }
 export interface backendInterface {
     addIngredient(name: string, unit: string, quantityInStock: bigint, lowStockThreshold: bigint): Promise<bigint>;
-    addMenuItem(name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>): Promise<bigint>;
+    addMenuItem(name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>): Promise<bigint>;
     addRider(name: string, mobile: string, area: string): Promise<bigint>;
     addUserNote(user: Principal, text: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
@@ -188,11 +210,13 @@ export interface backendInterface {
     createDelivery(orderId: bigint, customerName: string, address: string, deliveryTime: Time, notes: string): Promise<bigint>;
     createLead(name: string, mobile: string): Promise<bigint>;
     createReview(userName: string, rating: bigint, comment: string): Promise<Result>;
-    createSubscription(planType: PlanType): Promise<void>;
+    createSubscription(planId: bigint): Promise<void>;
+    createSubscriptionPlan(name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<bigint>;
     deleteCoupon(id: bigint): Promise<void>;
     deleteMenuItem(id: bigint): Promise<void>;
     deleteReview(id: string): Promise<Result_1>;
     deleteRider(id: bigint): Promise<void>;
+    deleteSubscriptionPlan(id: bigint): Promise<void>;
     deleteUser(user: Principal): Promise<void>;
     deleteUserNote(user: Principal, noteId: bigint): Promise<void>;
     getAllCoupons(): Promise<Array<Coupon>>;
@@ -202,6 +226,7 @@ export interface backendInterface {
     getAllOrders(): Promise<Array<Order>>;
     getAllReviews(): Promise<Array<Review>>;
     getAllRiders(): Promise<Array<Rider>>;
+    getAllSubscriptionPlans(): Promise<Array<SubscriptionPlan>>;
     getAllSubscriptions(): Promise<Array<Subscription>>;
     getAllUsers(): Promise<Array<{
         principal: Principal;
@@ -231,10 +256,11 @@ export interface backendInterface {
     updateDeliveryStatus(id: bigint, status: DeliveryStatus): Promise<void>;
     updateIngredientStock(id: bigint, newQuantity: bigint): Promise<void>;
     updateLeadStatus(id: bigint, status: LeadStatus): Promise<boolean>;
-    updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>): Promise<void>;
+    updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;
     updateRider(id: bigint, name: string, mobile: string, area: string): Promise<void>;
+    updateSubscriptionPlan(id: bigint, name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<void>;
     updateSubscriptionStatus(user: Principal, status: Variant_active_expired): Promise<void>;
     updateUserProfile(profile: UserProfile): Promise<void>;
     updateUserProfileByAdmin(user: Principal, profile: UserProfile): Promise<void>;

@@ -68,6 +68,16 @@ export const Ingredient = IDL.Record({
   'name' : IDL.Text,
   'unit' : IDL.Text,
 });
+export const BowlSize = IDL.Record({
+  'size' : IDL.Text,
+  'price' : IDL.Nat,
+  'calories' : IDL.Nat,
+  'protein' : IDL.Nat,
+});
+export const LinkedIngredient = IDL.Record({
+  'ingredientId' : IDL.Nat,
+  'quantityGrams' : IDL.Nat,
+});
 export const MenuItem = IDL.Record({
   'id' : IDL.Nat,
   'calories' : IDL.Nat,
@@ -77,6 +87,8 @@ export const MenuItem = IDL.Record({
   'price' : IDL.Nat,
   'ingredients' : IDL.Vec(IDL.Text),
   'protein' : IDL.Nat,
+  'sizes' : IDL.Vec(BowlSize),
+  'linkedIngredients' : IDL.Vec(LinkedIngredient),
 });
 export const OrderStatus = IDL.Variant({
   'pending' : IDL.Null,
@@ -122,7 +134,7 @@ export const UserProfile = IDL.Record({
   'mobile' : IDL.Text,
 });
 export const LeadStatus = IDL.Variant({
-  'new' : IDL.Null,
+  'new_' : IDL.Null,
   'contacted' : IDL.Null,
   'converted' : IDL.Null,
 });
@@ -167,6 +179,8 @@ export const idlService = IDL.Service({
         IDL.Nat,
         IDL.Vec(IDL.Text),
         IDL.Vec(IDL.Text),
+        IDL.Vec(BowlSize),
+        IDL.Vec(LinkedIngredient),
       ],
       [IDL.Nat],
       [],
@@ -234,7 +248,11 @@ export const idlService = IDL.Service({
   'hasAdminBeenClaimed' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'linkIngredientToMenuItem' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat], [], []),
-  'placeOrder' : IDL.Func([IDL.Vec(OrderItem), IDL.Nat, DeliveryType], [], []),
+  'placeOrder' : IDL.Func(
+      [IDL.Vec(OrderItem), IDL.Nat, DeliveryType],
+      [],
+      [],
+    ),
   'registerUser' : IDL.Func([UserProfile], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'saveUserProfile' : IDL.Func([UserProfile], [], []),
@@ -254,6 +272,8 @@ export const idlService = IDL.Service({
         IDL.Nat,
         IDL.Vec(IDL.Text),
         IDL.Vec(IDL.Text),
+        IDL.Vec(BowlSize),
+        IDL.Vec(LinkedIngredient),
       ],
       [],
       [],
@@ -334,6 +354,16 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'unit' : IDL.Text,
   });
+  const BowlSize = IDL.Record({
+    'size' : IDL.Text,
+    'price' : IDL.Nat,
+    'calories' : IDL.Nat,
+    'protein' : IDL.Nat,
+  });
+  const LinkedIngredient = IDL.Record({
+    'ingredientId' : IDL.Nat,
+    'quantityGrams' : IDL.Nat,
+  });
   const MenuItem = IDL.Record({
     'id' : IDL.Nat,
     'calories' : IDL.Nat,
@@ -343,6 +373,8 @@ export const idlFactory = ({ IDL }) => {
     'price' : IDL.Nat,
     'ingredients' : IDL.Vec(IDL.Text),
     'protein' : IDL.Nat,
+    'sizes' : IDL.Vec(BowlSize),
+    'linkedIngredients' : IDL.Vec(LinkedIngredient),
   });
   const OrderStatus = IDL.Variant({
     'pending' : IDL.Null,
@@ -388,7 +420,7 @@ export const idlFactory = ({ IDL }) => {
     'mobile' : IDL.Text,
   });
   const LeadStatus = IDL.Variant({
-    'new' : IDL.Null,
+    'new_' : IDL.Null,
     'contacted' : IDL.Null,
     'converted' : IDL.Null,
   });
@@ -433,6 +465,8 @@ export const idlFactory = ({ IDL }) => {
           IDL.Nat,
           IDL.Vec(IDL.Text),
           IDL.Vec(IDL.Text),
+          IDL.Vec(BowlSize),
+          IDL.Vec(LinkedIngredient),
         ],
         [IDL.Nat],
         [],
@@ -524,6 +558,8 @@ export const idlFactory = ({ IDL }) => {
           IDL.Nat,
           IDL.Vec(IDL.Text),
           IDL.Vec(IDL.Text),
+          IDL.Vec(BowlSize),
+          IDL.Vec(LinkedIngredient),
         ],
         [],
         [],

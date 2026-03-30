@@ -10,6 +10,16 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface BowlSize {
+  'size' : string,
+  'price' : bigint,
+  'calories' : bigint,
+  'protein' : bigint,
+}
+export interface LinkedIngredient {
+  'ingredientId' : bigint,
+  'quantityGrams' : bigint,
+}
 export interface Coupon {
   'id' : bigint,
   'discountValue' : bigint,
@@ -50,7 +60,7 @@ export interface Lead {
   'name' : string,
   'mobile' : string,
 }
-export type LeadStatus = { 'new' : null } |
+export type LeadStatus = { 'new_' : null } |
   { 'contacted' : null } |
   { 'converted' : null };
 export interface MenuItem {
@@ -62,6 +72,8 @@ export interface MenuItem {
   'price' : bigint,
   'ingredients' : Array<string>,
   'protein' : bigint,
+  'sizes' : Array<BowlSize>,
+  'linkedIngredients' : Array<LinkedIngredient>,
 }
 export interface MenuItemIngredient {
   'menuItemName' : string,
@@ -139,7 +151,7 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
   'addMenuItem' : ActorMethod<
-    [string, bigint, bigint, bigint, Array<string>, Array<string>],
+    [string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>],
     bigint
   >,
   'addRider' : ActorMethod<[string, string, string], bigint>,
@@ -202,7 +214,7 @@ export interface _SERVICE {
   'updateIngredientStock' : ActorMethod<[bigint, bigint], undefined>,
   'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
   'updateMenuItem' : ActorMethod<
-    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>],
+    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>],
     undefined
   >,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,

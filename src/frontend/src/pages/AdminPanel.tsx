@@ -66,6 +66,7 @@ import {
   Package,
   Pencil,
   PhoneCall,
+  Plus,
   Search,
   ShieldAlert,
   ShoppingCart,
@@ -77,6 +78,7 @@ import {
   UserCheck,
   Users,
   Utensils,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -1543,20 +1545,174 @@ function UsersTab() {
 }
 
 // ─── Subscriptions Tab ───────────────────────────────────────────────────────
+// Local SubscriptionPlan type (backend types may vary)
+interface SubscriptionPlanLocal {
+  id: string;
+  name: string;
+  totalMeals: number;
+  price: number;
+  validityDays: number;
+  description: string;
+}
+
+// Default plans seeded locally for display
+const DEFAULT_PLANS: SubscriptionPlanLocal[] = [
+  {
+    id: "weekly",
+    name: "Weekly",
+    totalMeals: 6,
+    price: 599,
+    validityDays: 7,
+    description:
+      "6 fresh salads over 7 days. Perfect for a weekly health kick.",
+  },
+  {
+    id: "monthly",
+    name: "Monthly",
+    totalMeals: 24,
+    price: 1999,
+    validityDays: 30,
+    description:
+      "24 salads over 30 days. Best value for committed health enthusiasts.",
+  },
+];
+
+const PLANS_KEY = "sk_admin_plans_v1";
+
+function loadLocalPlans(): SubscriptionPlanLocal[] {
+  try {
+    const raw = localStorage.getItem(PLANS_KEY);
+    if (raw) return JSON.parse(raw) as SubscriptionPlanLocal[];
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_PLANS;
+}
+
+function saveLocalPlans(plans: SubscriptionPlanLocal[]) {
+  localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+}
+
 function SubscriptionsTab() {
   const { actor, isFetching } = useActor();
+  const [plans, setPlans] = useState<SubscriptionPlanLocal[]>(() =>
+    loadLocalPlans(),
+  );
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
 
+  // Add/Edit Plan dialog
+  const [planDialog, setPlanDialog] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlanLocal | null>(
+    null,
+  );
+  const [planForm, setPlanForm] = useState({
+    name: "",
+    totalMeals: "",
+    price: "",
+    validityDays: "",
+    description: "",
+  });
+  const [planSaving, setPlanSaving] = useState(false);
+
+  // Delete confirmation
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!actor || isFetching) return;
-    actor
-      .getAllSubscriptions()
-      .then(setSubs)
-      .catch(() => toast.error("Failed to load subscriptions"))
-      .finally(() => setLoading(false));
+    void (async () => {
+      try {
+        const [s, u] = await Promise.all([
+          actor.getAllSubscriptions(),
+          actor.getAllUsers() as unknown as Promise<UserRecord[]>,
+        ]);
+        const sorted = [...s].sort((a, b) => {
+          const aActive = a.status === Variant_active_expired.active;
+          const bActive = b.status === Variant_active_expired.active;
+          return aActive === bActive ? 0 : aActive ? -1 : 1;
+        });
+        setSubs(sorted);
+        setUsers(u);
+      } catch {
+        toast.error("Failed to load subscription data");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [actor, isFetching]);
+
+  const openAddPlan = () => {
+    setEditingPlan(null);
+    setPlanForm({
+      name: "",
+      totalMeals: "",
+      price: "",
+      validityDays: "",
+      description: "",
+    });
+    setPlanDialog(true);
+  };
+
+  const openEditPlan = (plan: SubscriptionPlanLocal) => {
+    setEditingPlan(plan);
+    setPlanForm({
+      name: plan.name,
+      totalMeals: String(plan.totalMeals),
+      price: String(plan.price),
+      validityDays: String(plan.validityDays),
+      description: plan.description,
+    });
+    setPlanDialog(true);
+  };
+
+  const savePlan = () => {
+    const { name, totalMeals, price, validityDays, description } = planForm;
+    if (!name || !totalMeals || !price || !validityDays || !description) {
+      toast.error("All fields are required");
+      return;
+    }
+    setPlanSaving(true);
+    const updated = editingPlan
+      ? plans.map((p) =>
+          p.id === editingPlan.id
+            ? {
+                ...p,
+                name,
+                totalMeals: Number(totalMeals),
+                price: Number(price),
+                validityDays: Number(validityDays),
+                description,
+              }
+            : p,
+        )
+      : [
+          ...plans,
+          {
+            id: Date.now().toString(),
+            name,
+            totalMeals: Number(totalMeals),
+            price: Number(price),
+            validityDays: Number(validityDays),
+            description,
+          },
+        ];
+    setPlans(updated);
+    saveLocalPlans(updated);
+    setPlanDialog(false);
+    setPlanSaving(false);
+    toast.success(editingPlan ? "Plan updated" : "Plan created");
+  };
+
+  const confirmDelete = () => {
+    if (!deletePlanId) return;
+    const updated = plans.filter((p) => p.id !== deletePlanId);
+    setPlans(updated);
+    saveLocalPlans(updated);
+    setDeletePlanId(null);
+    toast.success("Plan deleted");
+  };
 
   const toggleStatus = async (sub: Subscription) => {
     if (!actor) return;
@@ -1581,101 +1737,353 @@ function SubscriptionsTab() {
     }
   };
 
+  const getUserName = (principal: { toString(): string }) => {
+    const match = users.find(
+      (u) => u.principal.toString() === principal.toString(),
+    );
+    return match?.profile?.name || truncatePrincipal(principal);
+  };
+
+  const getPlanName = (sub: Subscription) => {
+    return sub.planType === PlanType.monthly ? "Monthly" : "Weekly";
+  };
+
+  const getLowMeals = (sub: Subscription) => {
+    return (
+      sub.status === Variant_active_expired.active &&
+      Number(sub.saladsRemaining) <= 2
+    );
+  };
+
   if (loading) {
     return (
-      <div className="space-y-3" data-ocid="admin.subs.loading_state">
-        {[1, 2].map((n) => (
-          <Skeleton key={n} className="h-16 w-full rounded-xl" />
+      <div className="space-y-4" data-ocid="admin.subs.loading_state">
+        {[1, 2, 3].map((n) => (
+          <Skeleton key={n} className="h-20 w-full rounded-xl" />
         ))}
       </div>
     );
   }
 
-  if (subs.length === 0) {
-    return (
-      <div
-        className="text-center py-16 text-muted-foreground"
-        data-ocid="admin.subs.empty_state"
-      >
-        <p className="font-medium">No subscriptions found</p>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className="overflow-x-auto rounded-xl border border-border"
-      data-ocid="admin.subs.table"
-    >
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="font-semibold">User</TableHead>
-            <TableHead className="font-semibold">Plan</TableHead>
-            <TableHead className="font-semibold">Started</TableHead>
-            <TableHead className="font-semibold">Salads Left</TableHead>
-            <TableHead className="font-semibold">Status</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {subs.map((sub, i) => (
-            <TableRow
-              key={sub.user.toString()}
-              data-ocid={`admin.subs.item.${i + 1}`}
-            >
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {truncatePrincipal(sub.user)}
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant="outline"
-                  className="text-xs capitalize border-primary/30 text-primary"
-                >
-                  {sub.planType === PlanType.monthly ? "Monthly" : "Weekly"}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-xs">
-                {formatDate(sub.startDate)}
-              </TableCell>
-              <TableCell className="font-semibold text-center">
-                {Number(sub.saladsRemaining)}
-              </TableCell>
-              <TableCell>
-                <Badge
-                  className={`text-xs ${
-                    sub.status === Variant_active_expired.active
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {sub.status === Variant_active_expired.active
-                    ? "Active"
-                    : "Expired"}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs h-7 rounded-full"
-                  onClick={() => toggleStatus(sub)}
-                  disabled={updating === sub.user.toString()}
-                  data-ocid={`admin.subs.toggle.${i + 1}`}
-                >
-                  {updating === sub.user.toString() ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : sub.status === Variant_active_expired.active ? (
-                    "Expire"
-                  ) : (
-                    "Activate"
+    <div className="space-y-8">
+      {/* ── Section 1: Plans ── */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Tag className="h-5 w-5 text-primary" />
+            Subscription Plans
+          </h2>
+          <Button
+            size="sm"
+            className="gap-1 rounded-full"
+            onClick={openAddPlan}
+            data-ocid="admin.plans.open_modal_button"
+          >
+            <Plus className="h-4 w-4" /> Add Plan
+          </Button>
+        </div>
+
+        {plans.length === 0 ? (
+          <div
+            className="text-center py-10 text-muted-foreground rounded-xl border border-dashed border-border"
+            data-ocid="admin.plans.empty_state"
+          >
+            <Tag className="h-8 w-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">No plans yet. Add your first plan.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan, i) => (
+              <Card
+                key={plan.id}
+                className="border border-border rounded-xl"
+                data-ocid={`admin.plans.item.${i + 1}`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base font-semibold">
+                      {plan.name}
+                    </CardTitle>
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => openEditPlan(plan)}
+                        data-ocid={`admin.plans.edit_button.${i + 1}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeletePlanId(plan.id)}
+                        data-ocid={`admin.plans.delete_button.${i + 1}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-1 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1">
+                      <Utensils className="h-3.5 w-3.5" />
+                      {plan.totalMeals} meals
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      ₹{plan.price}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {plan.validityDays} days
+                    </span>
+                  </div>
+                  {plan.description && (
+                    <p className="text-xs line-clamp-2 mt-1 text-muted-foreground/80">
+                      {plan.description}
+                    </p>
                   )}
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Section 2: User Subscriptions ── */}
+      <section>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+          <Users className="h-5 w-5 text-primary" />
+          Active Subscriptions
+        </h2>
+
+        {subs.length === 0 ? (
+          <div
+            className="text-center py-10 text-muted-foreground rounded-xl border border-dashed border-border"
+            data-ocid="admin.subs.empty_state"
+          >
+            <Users className="h-8 w-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">No user subscriptions found.</p>
+          </div>
+        ) : (
+          <div
+            className="overflow-x-auto rounded-xl border border-border"
+            data-ocid="admin.subs.table"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">User</TableHead>
+                  <TableHead className="font-semibold">Plan</TableHead>
+                  <TableHead className="font-semibold">Meals Left</TableHead>
+                  <TableHead className="font-semibold">Started</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subs.map((sub, i) => {
+                  const low = getLowMeals(sub);
+                  const isExpired =
+                    sub.status === Variant_active_expired.expired;
+                  return (
+                    <TableRow
+                      key={sub.user.toString()}
+                      data-ocid={`admin.subs.item.${i + 1}`}
+                    >
+                      <TableCell className="font-medium text-sm">
+                        {getUserName(sub.user)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-primary/30 text-primary"
+                        >
+                          {getPlanName(sub)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold">
+                            {Number(sub.saladsRemaining)}
+                          </span>
+                          {low && (
+                            <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-200 px-1.5 py-0">
+                              <AlertTriangle className="h-3 w-3 mr-0.5 inline" />
+                              Low
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(sub.startDate)}
+                      </TableCell>
+                      <TableCell>
+                        {isExpired ? (
+                          <Badge className="text-xs bg-red-100 text-red-700 border-red-200">
+                            Expired
+                          </Badge>
+                        ) : (
+                          <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
+                            Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 rounded-full"
+                          onClick={() => toggleStatus(sub)}
+                          disabled={updating === sub.user.toString()}
+                          data-ocid={`admin.subs.toggle.${i + 1}`}
+                        >
+                          {updating === sub.user.toString() ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : sub.status === Variant_active_expired.active ? (
+                            "Expire"
+                          ) : (
+                            "Activate"
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      {/* ── Add/Edit Plan Dialog ── */}
+      <Dialog open={planDialog} onOpenChange={setPlanDialog}>
+        <DialogContent className="max-w-md" data-ocid="admin.plans.dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPlan ? "Edit Plan" : "Add Subscription Plan"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="plan-name">Plan Name</Label>
+              <Input
+                id="plan-name"
+                placeholder="e.g. Weekly, Monthly, Custom"
+                value={planForm.name}
+                onChange={(e) =>
+                  setPlanForm((p) => ({ ...p, name: e.target.value }))
+                }
+                data-ocid="admin.plans.input"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="plan-meals">Total Meals</Label>
+                <Input
+                  id="plan-meals"
+                  type="number"
+                  min="1"
+                  placeholder="6"
+                  value={planForm.totalMeals}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, totalMeals: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="plan-price">Price (₹)</Label>
+                <Input
+                  id="plan-price"
+                  type="number"
+                  min="0"
+                  placeholder="599"
+                  value={planForm.price}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, price: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="plan-days">Validity (Days)</Label>
+              <Input
+                id="plan-days"
+                type="number"
+                min="1"
+                placeholder="7"
+                value={planForm.validityDays}
+                onChange={(e) =>
+                  setPlanForm((p) => ({ ...p, validityDays: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="plan-desc">Description</Label>
+              <Textarea
+                id="plan-desc"
+                placeholder="Brief description of this plan..."
+                rows={2}
+                value={planForm.description}
+                onChange={(e) =>
+                  setPlanForm((p) => ({ ...p, description: e.target.value }))
+                }
+                data-ocid="admin.plans.textarea"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPlanDialog(false)}
+              data-ocid="admin.plans.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={savePlan}
+              disabled={planSaving}
+              data-ocid="admin.plans.submit_button"
+            >
+              {planSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              {editingPlan ? "Save Changes" : "Create Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation ── */}
+      <AlertDialog
+        open={deletePlanId !== null}
+        onOpenChange={(o) => !o && setDeletePlanId(null)}
+      >
+        <AlertDialogContent data-ocid="admin.plans.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Plan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The plan will be permanently
+              removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="admin.plans.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+              data-ocid="admin.plans.confirm_button"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1995,57 +2403,149 @@ function InventoryTab() {
 }
 
 // ─── Menu Management Tab ─────────────────────────────────────────────────────
+const DEFAULT_SIZES = [
+  { size: "small", price: "", calories: "", protein: "" },
+  { size: "medium", price: "", calories: "", protein: "" },
+  { size: "large", price: "", calories: "", protein: "" },
+];
+
 const EMPTY_FORM = {
   name: "",
-  price: "",
-  calories: "",
-  protein: "",
-  ingredients: "",
   tags: [] as string[],
+  sizes: DEFAULT_SIZES.map((s) => ({ ...s })),
+  linkedIngredients: [
+    { key: Date.now(), ingredientId: "", quantityGrams: "" },
+  ] as {
+    key: number;
+    ingredientId: string;
+    quantityGrams: string;
+  }[],
 };
 
 function MenuManagementTab() {
   const { actor, isFetching } = useActor();
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [inventory, setInventory] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<typeof EMPTY_FORM>({
+    ...EMPTY_FORM,
+    sizes: DEFAULT_SIZES.map((s) => ({ ...s })),
+    linkedIngredients: [{ key: 0, ingredientId: "", quantityGrams: "" }],
+  });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<bigint | null>(null);
+  const [ingredientError, setIngredientError] = useState("");
 
   useEffect(() => {
     if (!actor || isFetching) return;
-    actor
-      .getAllMenuItems()
-      .then((data) => setItems(data))
-      .catch(() => toast.error("Failed to load menu items"))
+    Promise.all([actor.getAllMenuItems(), actor.getAllIngredients()])
+      .then(([menuData, invData]) => {
+        setItems(menuData);
+        setInventory(invData);
+      })
+      .catch(() => toast.error("Failed to load menu data"))
       .finally(() => setLoading(false));
   }, [actor, isFetching]);
 
+  function freshForm() {
+    return {
+      name: "",
+      tags: [] as string[],
+      sizes: DEFAULT_SIZES.map((s) => ({ ...s })),
+      linkedIngredients: [
+        { key: Date.now(), ingredientId: "", quantityGrams: "" },
+      ] as {
+        key: number;
+        ingredientId: string;
+        quantityGrams: string;
+      }[],
+    };
+  }
+
   function openAdd() {
     setEditingItem(null);
-    setForm(EMPTY_FORM);
+    setForm(freshForm());
+    setIngredientError("");
     setShowForm(true);
   }
 
   function openEdit(item: MenuItem) {
     setEditingItem(item);
+    const sizes =
+      (item as any).sizes && (item as any).sizes.length === 3
+        ? (item as any).sizes.map((s: any) => ({
+            size: s.size,
+            price: s.price.toString(),
+            calories: s.calories.toString(),
+            protein: s.protein.toString(),
+          }))
+        : DEFAULT_SIZES.map((s) => ({ ...s }));
+    const linkedIngredients =
+      (item as any).linkedIngredients &&
+      (item as any).linkedIngredients.length > 0
+        ? (item as any).linkedIngredients.map((li: any) => ({
+            ingredientId: li.ingredientId.toString(),
+            quantityGrams: li.quantityGrams.toString(),
+          }))
+        : [{ key: 0, ingredientId: "", quantityGrams: "" }];
     setForm({
       name: item.name,
-      price: item.price.toString(),
-      calories: item.calories.toString(),
-      protein: item.protein.toString(),
-      ingredients: item.ingredients.join(", "),
       tags: item.tags ?? [],
+      sizes,
+      linkedIngredients,
     });
+    setIngredientError("");
     setShowForm(true);
   }
 
   function closeForm() {
     setShowForm(false);
     setEditingItem(null);
-    setForm(EMPTY_FORM);
+    setForm(freshForm());
+    setIngredientError("");
+  }
+
+  function addIngredientRow() {
+    setForm((p) => ({
+      ...p,
+      linkedIngredients: [
+        ...p.linkedIngredients,
+        { key: Date.now(), ingredientId: "", quantityGrams: "" },
+      ],
+    }));
+  }
+
+  function removeIngredientRow(idx: number) {
+    setForm((p) => ({
+      ...p,
+      linkedIngredients: p.linkedIngredients.filter((_, i) => i !== idx),
+    }));
+  }
+
+  function updateIngredientRow(
+    idx: number,
+    field: "ingredientId" | "quantityGrams",
+    value: string,
+  ) {
+    setForm((p) => {
+      const updated = [...p.linkedIngredients];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...p, linkedIngredients: updated };
+    });
+  }
+
+  function updateSize(
+    idx: number,
+    field: "price" | "calories" | "protein",
+    value: string,
+  ) {
+    setForm((p) => {
+      const updated = [...p.sizes];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...p, sizes: updated };
+    });
   }
 
   async function handleSave() {
@@ -2055,17 +2555,63 @@ function MenuManagementTab() {
       toast.error("Name is required");
       return;
     }
-    const price = BigInt(Math.max(0, Number.parseInt(form.price) || 0));
-    const calories = BigInt(Math.max(0, Number.parseInt(form.calories) || 0));
-    const protein = BigInt(Math.max(0, Number.parseInt(form.protein) || 0));
-    const ingredients = form.ingredients
-      .split(",")
-      .map((s) => s.trim())
+
+    // Validate ingredients
+    const filledIngredients = form.linkedIngredients.filter(
+      (li) => li.ingredientId !== "" || li.quantityGrams !== "",
+    );
+    for (const li of filledIngredients) {
+      if (!li.ingredientId) {
+        setIngredientError("Please select an ingredient for all rows");
+        return;
+      }
+      if (!li.quantityGrams || Number(li.quantityGrams) <= 0) {
+        setIngredientError("Please enter quantity (grams) for all ingredients");
+        return;
+      }
+    }
+    setIngredientError("");
+
+    // Build sizes array (skip rows with all empty)
+    const sizes = form.sizes
+      .filter((s) => s.price !== "" || s.calories !== "" || s.protein !== "")
+      .map((s) => ({
+        size: s.size,
+        price: BigInt(Math.max(0, Number.parseInt(s.price) || 0)),
+        calories: BigInt(Math.max(0, Number.parseInt(s.calories) || 0)),
+        protein: BigInt(Math.max(0, Number.parseInt(s.protein) || 0)),
+      }));
+
+    // Compute base price/calories/protein from medium size
+    const mediumSize = form.sizes[1];
+    const price = BigInt(Math.max(0, Number.parseInt(mediumSize?.price) || 0));
+    const calories = BigInt(
+      Math.max(0, Number.parseInt(mediumSize?.calories) || 0),
+    );
+    const protein = BigInt(
+      Math.max(0, Number.parseInt(mediumSize?.protein) || 0),
+    );
+
+    // Build linkedIngredients
+    const linkedIngredients = filledIngredients.map((li) => ({
+      ingredientId: BigInt(li.ingredientId),
+      quantityGrams: BigInt(
+        Math.max(0, Number.parseInt(li.quantityGrams) || 0),
+      ),
+    }));
+
+    // Build ingredients display names from selected inventory items
+    const ingredients = filledIngredients
+      .map((li) => {
+        const inv = inventory.find((i) => i.id.toString() === li.ingredientId);
+        return inv ? inv.name : "";
+      })
       .filter(Boolean);
+
     setSaving(true);
     try {
       if (editingItem) {
-        await actor.updateMenuItem(
+        await (actor as any).updateMenuItem(
           editingItem.id,
           name,
           price,
@@ -2073,6 +2619,8 @@ function MenuManagementTab() {
           protein,
           ingredients,
           form.tags,
+          sizes,
+          linkedIngredients,
         );
         setItems((prev) =>
           prev.map((i) =>
@@ -2085,19 +2633,23 @@ function MenuManagementTab() {
                   protein,
                   ingredients,
                   tags: form.tags,
+                  sizes,
+                  linkedIngredients,
                 }
               : i,
           ),
         );
         toast.success("Salad updated");
       } else {
-        const newId = await actor.addMenuItem(
+        const newId = await (actor as any).addMenuItem(
           name,
           price,
           calories,
           protein,
           ingredients,
           form.tags,
+          sizes,
+          linkedIngredients,
         );
         setItems((prev) => [
           ...prev,
@@ -2110,6 +2662,8 @@ function MenuManagementTab() {
             ingredients,
             tags: form.tags,
             enabled: true,
+            sizes,
+            linkedIngredients,
           },
         ]);
         toast.success("Salad added");
@@ -2153,6 +2707,12 @@ function MenuManagementTab() {
     }
   }
 
+  const SIZE_LABELS: Record<string, string> = {
+    small: "Small",
+    medium: "Medium",
+    large: "Large",
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -2175,127 +2735,218 @@ function MenuManagementTab() {
               {editingItem ? "Edit Salad" : "Add New Salad"}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <Label htmlFor="menu-name" className="text-sm font-medium">
-                  Name
-                </Label>
-                <Input
-                  id="menu-name"
-                  placeholder="e.g. Caesar Salad"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, name: e.target.value }))
-                  }
-                  className="mt-1"
-                  data-ocid="menu.input"
-                />
-              </div>
-              <div>
-                <Label htmlFor="menu-price" className="text-sm font-medium">
-                  Price (₹)
-                </Label>
-                <Input
-                  id="menu-price"
-                  type="number"
-                  min="0"
-                  placeholder="199"
-                  value={form.price}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, price: e.target.value }))
-                  }
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="menu-calories" className="text-sm font-medium">
-                  Calories
-                </Label>
-                <Input
-                  id="menu-calories"
-                  type="number"
-                  min="0"
-                  placeholder="320"
-                  value={form.calories}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, calories: e.target.value }))
-                  }
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="menu-protein" className="text-sm font-medium">
-                  Protein (g)
-                </Label>
-                <Input
-                  id="menu-protein"
-                  type="number"
-                  min="0"
-                  placeholder="12"
-                  value={form.protein}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, protein: e.target.value }))
-                  }
-                  className="mt-1"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label
-                  htmlFor="menu-ingredients"
-                  className="text-sm font-medium"
-                >
-                  Ingredients{" "}
-                  <span className="text-muted-foreground font-normal">
-                    (comma-separated)
-                  </span>
-                </Label>
-                <Input
-                  id="menu-ingredients"
-                  placeholder="e.g. Lettuce, Tomato, Cheese, Croutons"
-                  value={form.ingredients}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, ingredients: e.target.value }))
-                  }
-                  className="mt-1"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label className="text-sm font-medium">Goal Tags</Label>
-                <div className="flex flex-wrap gap-4 mt-2">
-                  {(
-                    [
-                      { value: "weight-loss", label: "Weight Loss" },
-                      { value: "high-protein", label: "High Protein" },
-                      { value: "detox", label: "Detox" },
-                    ] as { value: string; label: string }[]
-                  ).map((tag) => (
-                    <div key={tag.value} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`tag-${tag.value}`}
-                        checked={form.tags.includes(tag.value)}
-                        onCheckedChange={(checked) =>
-                          setForm((p) => ({
-                            ...p,
-                            tags: checked
-                              ? [...p.tags, tag.value]
-                              : p.tags.filter((t) => t !== tag.value),
-                          }))
-                        }
-                        data-ocid="menu.checkbox"
-                      />
-                      <Label
-                        htmlFor={`tag-${tag.value}`}
-                        className="text-sm cursor-pointer"
-                      >
-                        {tag.label}
-                      </Label>
+          <CardContent className="space-y-5">
+            {/* Name */}
+            <div>
+              <Label htmlFor="menu-name" className="text-sm font-medium">
+                Name
+              </Label>
+              <Input
+                id="menu-name"
+                placeholder="e.g. Caesar Salad"
+                value={form.name}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, name: e.target.value }))
+                }
+                className="mt-1"
+                data-ocid="menu.input"
+              />
+            </div>
+
+            {/* Bowl Sizes */}
+            <div>
+              <Label className="text-sm font-semibold text-foreground">
+                Bowl Sizes
+              </Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Set price, calories, and protein for each size
+              </p>
+              <div className="space-y-2">
+                {form.sizes.map((s, idx) => (
+                  <div
+                    key={s.size}
+                    className="grid grid-cols-4 gap-2 items-center p-3 rounded-lg bg-muted/40 border border-border/50"
+                  >
+                    <div className="flex items-center">
+                      <span className="text-sm font-semibold text-primary w-16">
+                        {SIZE_LABELS[s.size] ?? s.size}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Price (₹)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="149"
+                        value={s.price}
+                        onChange={(e) =>
+                          updateSize(idx, "price", e.target.value)
+                        }
+                        className="h-8 text-sm mt-0.5"
+                        data-ocid={`menu.size_price.${idx + 1}`}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Calories
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="320"
+                        value={s.calories}
+                        onChange={(e) =>
+                          updateSize(idx, "calories", e.target.value)
+                        }
+                        className="h-8 text-sm mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Protein (g)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="12"
+                        value={s.protein}
+                        onChange={(e) =>
+                          updateSize(idx, "protein", e.target.value)
+                        }
+                        className="h-8 text-sm mt-0.5"
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="flex gap-2 mt-4">
+
+            {/* Ingredients */}
+            <div>
+              <Label className="text-sm font-semibold text-foreground">
+                Ingredients
+              </Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Select ingredients from inventory and specify quantity
+              </p>
+              <div className="space-y-2">
+                {form.linkedIngredients.map((li, idx) => (
+                  <div key={li.key} className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <select
+                        value={li.ingredientId}
+                        onChange={(e) =>
+                          updateIngredientRow(
+                            idx,
+                            "ingredientId",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        data-ocid={`menu.ingredient_select.${idx + 1}`}
+                      >
+                        <option value="">Select ingredient...</option>
+                        {inventory.map((inv) => (
+                          <option
+                            key={inv.id.toString()}
+                            value={inv.id.toString()}
+                          >
+                            {inv.name} ({inv.unit})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-28">
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="Qty (g)"
+                        value={li.quantityGrams}
+                        onChange={(e) =>
+                          updateIngredientRow(
+                            idx,
+                            "quantityGrams",
+                            e.target.value,
+                          )
+                        }
+                        className="h-9 text-sm"
+                        data-ocid={`menu.ingredient_qty.${idx + 1}`}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => removeIngredientRow(idx)}
+                      disabled={form.linkedIngredients.length === 1}
+                      data-ocid={`menu.ingredient_delete.${idx + 1}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {ingredientError && (
+                <p
+                  className="text-xs text-destructive mt-1"
+                  data-ocid="menu.ingredient_error_state"
+                >
+                  {ingredientError}
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 gap-1.5 text-primary border-primary/40 hover:bg-primary/5"
+                onClick={addIngredientRow}
+                data-ocid="menu.add_ingredient_button"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Ingredient
+              </Button>
+            </div>
+
+            {/* Goal Tags */}
+            <div>
+              <Label className="text-sm font-semibold">Goal Tags</Label>
+              <div className="flex flex-wrap gap-4 mt-2">
+                {(
+                  [
+                    { value: "weight-loss", label: "Weight Loss" },
+                    { value: "high-protein", label: "High Protein" },
+                    { value: "detox", label: "Detox" },
+                  ] as { value: string; label: string }[]
+                ).map((tag) => (
+                  <div key={tag.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`tag-${tag.value}`}
+                      checked={form.tags.includes(tag.value)}
+                      onCheckedChange={(checked) =>
+                        setForm((p) => ({
+                          ...p,
+                          tags: checked
+                            ? [...p.tags, tag.value]
+                            : p.tags.filter((t) => t !== tag.value),
+                        }))
+                      }
+                      data-ocid="menu.checkbox"
+                    />
+                    <Label
+                      htmlFor={`tag-${tag.value}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {tag.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
               <Button
                 onClick={handleSave}
                 disabled={saving}
@@ -2335,100 +2986,118 @@ function MenuManagementTab() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {items.map((item, idx) => (
-            <Card
-              key={item.id.toString()}
-              className={`transition-opacity ${item.enabled ? "" : "opacity-60"}`}
-              data-ocid={`menu.item.${idx + 1}`}
-            >
-              <CardContent className="py-3 px-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-foreground">
-                        {item.name}
-                      </span>
-                      <Badge
-                        className={
-                          item.enabled
-                            ? "bg-green-100 text-green-700 border-green-200"
-                            : "bg-gray-100 text-gray-500 border-gray-200"
-                        }
-                      >
-                        {item.enabled ? "Enabled" : "Disabled"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
-                      <span className="font-medium text-primary">
-                        ₹{item.price.toString()}
-                      </span>
-                      <span>{item.calories.toString()} kcal</span>
-                      <span>{item.protein.toString()}g protein</span>
-                    </div>
-                    {item.ingredients.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                        {item.ingredients.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      checked={item.enabled}
-                      onCheckedChange={() => handleToggle(item)}
-                      data-ocid={`menu.toggle.${idx + 1}`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEdit(item)}
-                      className="h-8 w-8 p-0"
-                      data-ocid={`menu.edit_button.${idx + 1}`}
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    {confirmDelete === item.id ? (
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDelete(item.id)}
-                          className="h-8 px-2 text-xs"
-                          data-ocid={`menu.confirm_button.${idx + 1}`}
+          {items.map((item, idx) => {
+            const sizeSummary =
+              (item as any).sizes && (item as any).sizes.length > 0
+                ? (item as any).sizes
+                    .map(
+                      (s) =>
+                        `${SIZE_LABELS[s.size]?.[0] ?? s.size[0].toUpperCase()}: ₹${s.price.toString()}`,
+                    )
+                    .join(" | ")
+                : null;
+            const linkedCount = (item as any).linkedIngredients?.length ?? 0;
+            return (
+              <Card
+                key={item.id.toString()}
+                className={`transition-opacity ${item.enabled ? "" : "opacity-60"}`}
+                data-ocid={`menu.item.${idx + 1}`}
+              >
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-foreground">
+                          {item.name}
+                        </span>
+                        <Badge
+                          className={
+                            item.enabled
+                              ? "bg-green-100 text-green-700 border-green-200"
+                              : "bg-gray-100 text-gray-500 border-gray-200"
+                          }
                         >
-                          Yes
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setConfirmDelete(null)}
-                          className="h-8 px-2 text-xs"
-                          data-ocid={`menu.cancel_button.${idx + 1}`}
-                        >
-                          No
-                        </Button>
+                          {item.enabled ? "Enabled" : "Disabled"}
+                        </Badge>
                       </div>
-                    ) : (
+                      {sizeSummary ? (
+                        <p className="text-xs text-primary font-medium mt-1">
+                          {sizeSummary}
+                        </p>
+                      ) : (
+                        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
+                          <span className="font-medium text-primary">
+                            ₹{item.price.toString()}
+                          </span>
+                          <span>{item.calories.toString()} kcal</span>
+                          <span>{item.protein.toString()}g protein</span>
+                        </div>
+                      )}
+                      {linkedCount > 0 && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {linkedCount} ingredient{linkedCount !== 1 ? "s" : ""}{" "}
+                          linked
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Switch
+                        checked={item.enabled}
+                        onCheckedChange={() => handleToggle(item)}
+                        data-ocid={`menu.toggle.${idx + 1}`}
+                      />
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setConfirmDelete(item.id)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        data-ocid={`menu.delete_button.${idx + 1}`}
+                        onClick={() => openEdit(item)}
+                        className="h-8 w-8 p-0"
+                        data-ocid={`menu.edit_button.${idx + 1}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                    )}
+                      {confirmDelete === item.id ? (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDelete(item.id)}
+                            className="h-8 px-2 text-xs"
+                            data-ocid={`menu.confirm_button.${idx + 1}`}
+                          >
+                            Yes
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmDelete(null)}
+                            className="h-8 px-2 text-xs"
+                            data-ocid={`menu.cancel_button.${idx + 1}`}
+                          >
+                            No
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirmDelete(item.id)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          data-ocid={`menu.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
 // ─── Offers / Coupons Tab ─────────────────────────────────────────────────────
 function OffersTab() {
   const { actor, isFetching } = useActor();

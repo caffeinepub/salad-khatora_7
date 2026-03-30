@@ -1,12 +1,13 @@
 import Map "mo:core/Map";
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
+import Int "mo:core/Int";
 import Time "mo:core/Time";
 import List "mo:core/List";
 import Array "mo:core/Array";
 import Runtime "mo:core/Runtime";
 import Text "mo:core/Text";
-import Random "mo:core/Random";
+
 
 // Mixins must be imported directly from their file path
 import MixinAuthorization "authorization/MixinAuthorization";
@@ -59,13 +60,31 @@ actor {
     createdAt : Time.Time;
   };
 
+  // ─── Subscription Plans ──────────────────────────────────────────────────────
+  public type SubscriptionPlan = {
+    id : Nat;
+    name : Text;
+    totalMeals : Nat;
+    price : Nat;
+    validityDays : Nat;
+    description : Text;
+  };
+
+  // V1 type kept for stable variable compatibility (migration from old on-chain data)
+  type SubscriptionV1 = {
+    user : Principal;
+    planType : { #weekly; #monthly };
+    startDate : Time.Time;
+    status : { #active; #expired };
+    saladsRemaining : Nat;
+  };
+
   public type Subscription = {
     user : Principal;
-    planType : {
-      #weekly;
-      #monthly;
-    };
+    planId : Nat;
+    planName : Text;
     startDate : Time.Time;
+    expiryDate : Time.Time;
     status : {
       #active;
       #expired;
@@ -87,8 +106,6 @@ actor {
     quantityPerOrder : Nat;
   };
 
-
-
   // V1 type kept for stable variable compatibility (migration)
   type MenuItemV1 = {
     id : Nat;
@@ -100,8 +117,8 @@ actor {
     enabled : Bool;
   };
 
-  // Current MenuItem type (with tags)
-  public type MenuItem = {
+  // V2 type (with tags)
+  type MenuItemV2 = {
     id : Nat;
     name : Text;
     price : Nat;
@@ -112,22 +129,57 @@ actor {
     enabled : Bool;
   };
 
+  // ─── New Bowl Size and LinkedIngredient types ─────────────────────────────
+  public type BowlSize = {
+    size : Text;      // "small", "medium", or "large"
+    price : Nat;
+    calories : Nat;
+    protein : Nat;
+  };
+
+  public type LinkedIngredient = {
+    ingredientId : Nat;
+    quantityGrams : Nat;
+  };
+
+  // V3 MenuItem — current public type
+  public type MenuItem = {
+    id : Nat;
+    name : Text;
+    price : Nat;
+    calories : Nat;
+    protein : Nat;
+    ingredients : [Text];
+    tags : [Text];
+    enabled : Bool;
+    sizes : [BowlSize];
+    linkedIngredients : [LinkedIngredient];
+  };
+
   let userProfiles = Map.empty<Principal, UserProfile>();
   let orders = Map.empty<Nat, Order>();
-  let subscriptions = Map.empty<Principal, Subscription>();
+  // Legacy stable variable — keeps old type to avoid compatibility error
+  let subscriptions = Map.empty<Principal, SubscriptionV1>();
+  // V2 stable variable with new Subscription type
+  let subscriptionsV2 = Map.empty<Principal, Subscription>();
+  var subscriptionsMigrated = false;
+  let subscriptionPlans = Map.empty<Nat, SubscriptionPlan>();
+  var nextPlanId = 0;
+  var plansSeeded = false;
   let ingredients = Map.empty<Nat, Ingredient>();
   let menuItemIngredients = List.empty<MenuItemIngredient>();
 
-  // Legacy stable map (old type, no tags) — kept for migration from previous deployment
+  // Legacy stable maps kept for migration
   let menuItems = Map.empty<Nat, MenuItemV1>();
-  // Current stable map (new type, with tags)
-  let menuItemsV2 = Map.empty<Nat, MenuItem>();
+  let menuItemsV2 = Map.empty<Nat, MenuItemV2>();
+  // Current V3 map
+  let menuItemsV3 = Map.empty<Nat, MenuItem>();
 
   var nextOrderId = 0;
   var nextIngredientId = 0;
   var nextMenuItemId = 0;
-  // Migration flag: ensures we only migrate once
   var menuItemsMigrated = false;
+  var menuItemsV3Migrated = false;
 
   // ─── Leads ───────────────────────────────────────────────────────────────────
   public type LeadStatus = { #new_; #contacted; #converted };
@@ -141,7 +193,6 @@ actor {
 
   let leads = Map.empty<Nat, Lead>();
   var nextLeadId = 0;
-  // ─────────────────────────────────────────────────────────────────────────────
 
   // ─── Reviews ─────────────────────────────────────────────────────────────────
   public type ReviewStatus = {
@@ -167,24 +218,46 @@ actor {
   let reviews = Map.empty<Text, Review>();
   var reviewIdCounter : Nat = 0;
 
-  // Helper function to generate UUID-like ID
   func generateReviewId() : Text {
     reviewIdCounter += 1;
     let timestamp = Time.now();
-    reviewIdCounter.toText().concat("-".concat(Int.toText(timestamp)))
+    reviewIdCounter.toText().concat("-".concat(timestamp.toText()))
   };
 
-  // createReview: authenticated users only (not anonymous)
+  // ─── Seed Default Plans ───────────────────────────────────────────────────────
+  func seedPlans() {
+    if (not plansSeeded) {
+      let weeklyId = nextPlanId;
+      nextPlanId += 1;
+      subscriptionPlans.add(weeklyId, {
+        id = weeklyId;
+        name = "Weekly";
+        totalMeals = 6;
+        price = 599;
+        validityDays = 7;
+        description = "6 fresh salads over 7 days. Perfect for trying healthy eating.";
+      });
+      let monthlyId = nextPlanId;
+      nextPlanId += 1;
+      subscriptionPlans.add(monthlyId, {
+        id = monthlyId;
+        name = "Monthly";
+        totalMeals = 24;
+        price = 1999;
+        validityDays = 30;
+        description = "24 salads over 30 days. Best value for committed healthy eaters.";
+      });
+      plansSeeded := true;
+    };
+  };
+
   public shared ({ caller }) func createReview(userName : Text, rating : Nat, comment : Text) : async Result<Review, Text> {
     if (caller.isAnonymous()) {
       return #err("Unauthorized: Must be authenticated to create a review");
     };
-
-    // Validate rating is 1-5
     if (rating < 1 or rating > 5) {
       return #err("Invalid rating: must be between 1 and 5");
     };
-
     let id = generateReviewId();
     let review : Review = {
       id;
@@ -194,12 +267,10 @@ actor {
       date = Time.now();
       status = #pending;
     };
-
     reviews.add(id, review);
     #ok(review)
   };
 
-  // getApprovedReviews: public query, no auth required
   public query func getApprovedReviews() : async [Review] {
     reviews.values().toArray().filter(func(r : Review) : Bool {
       switch (r.status) {
@@ -209,7 +280,6 @@ actor {
     })
   };
 
-  // getAllReviews: admin-only
   public query ({ caller }) func getAllReviews() : async [Review] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all reviews");
@@ -217,12 +287,10 @@ actor {
     reviews.values().toArray()
   };
 
-  // updateReviewStatus: admin-only
   public shared ({ caller }) func updateReviewStatus(id : Text, status : ReviewStatus) : async Result<Review, Text> {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update review status");
     };
-
     switch (reviews.get(id)) {
       case (?review) {
         let updatedReview : Review = {
@@ -242,12 +310,10 @@ actor {
     }
   };
 
-  // deleteReview: admin-only
   public shared ({ caller }) func deleteReview(id : Text) : async Result<(), Text> {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can delete reviews");
     };
-
     switch (reviews.get(id)) {
       case (?_) {
         reviews.remove(id);
@@ -258,10 +324,10 @@ actor {
       };
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  // Migrate data from legacy menuItems (V1, no tags) into menuItemsV2 (with tags)
+  // Migrate data from legacy maps
   system func postupgrade() {
+    // V1 -> V2
     if (not menuItemsMigrated) {
       for ((k, v) in menuItems.toArray().values()) {
         menuItemsV2.add(k, {
@@ -277,6 +343,58 @@ actor {
       };
       menuItemsMigrated := true;
     };
+    // V2 -> V3
+    if (not menuItemsV3Migrated) {
+      for ((k, v) in menuItemsV2.toArray().values()) {
+        menuItemsV3.add(k, {
+          id = v.id;
+          name = v.name;
+          price = v.price;
+          calories = v.calories;
+          protein = v.protein;
+          ingredients = v.ingredients;
+          tags = v.tags;
+          enabled = v.enabled;
+          sizes = [];
+          linkedIngredients = [];
+        });
+      };
+      menuItemsV3Migrated := true;
+    };
+    // Seed default subscription plans
+    seedPlans();
+    // Migrate V1 subscriptions to V2
+    if (not subscriptionsMigrated) {
+      for ((principal, sub) in subscriptions.toArray().values()) {
+        // Only migrate if not already in V2
+        if (subscriptionsV2.get(principal) == null) {
+          let planId : Nat = switch (sub.planType) {
+            case (#weekly) { 0 };
+            case (#monthly) { 1 };
+          };
+          let planName : Text = switch (sub.planType) {
+            case (#weekly) { "Weekly" };
+            case (#monthly) { "Monthly" };
+          };
+          // Set expiry as startDate + 7 or 30 days
+          let validityNanos : Int = switch (sub.planType) {
+            case (#weekly) { 7 * 86_400_000_000_000 };
+            case (#monthly) { 30 * 86_400_000_000_000 };
+          };
+          let expiryDate : Time.Time = sub.startDate + validityNanos;
+          subscriptionsV2.add(principal, {
+            user = sub.user;
+            planId;
+            planName;
+            startDate = sub.startDate;
+            expiryDate;
+            status = sub.status;
+            saladsRemaining = sub.saladsRemaining;
+          });
+        };
+      };
+      subscriptionsMigrated := true;
+    };
   };
 
   public type DeliveryType = {
@@ -289,14 +407,11 @@ actor {
     #monthly;
   };
 
-  // ── First-Admin Claim ─────────────────────────────────────────────────────────────────────────────────
-  // Returns true if an admin has already been claimed (no more claims allowed)
+  // ── First-Admin Claim ──────────────────────────────────────────────────────
   public query func hasAdminBeenClaimed() : async Bool {
     firstAdminClaimed;
   };
 
-  // One-time function: the first authenticated user to call this becomes admin.
-  // After that, it is permanently locked.
   public shared ({ caller }) func claimFirstAdminRole() : async () {
     if (caller.isAnonymous()) {
       Runtime.trap("Must be authenticated to claim admin");
@@ -304,14 +419,12 @@ actor {
     if (firstAdminClaimed) {
       Runtime.trap("Admin has already been claimed");
     };
-    // Grant admin role directly
     accessControlState.userRoles.add(caller, #admin);
     accessControlState.adminAssigned := true;
     firstAdminClaimed := true;
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // Place an order (user must be authenticated)
+  // Place an order — deducts 1 meal from active subscription if available
   public shared ({ caller }) func placeOrder(items : [OrderItem], totalAmount : Nat, deliveryType : DeliveryType) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can place orders");
@@ -329,26 +442,79 @@ actor {
       createdAt = Time.now();
     };
 
-    // Deduct ingredients from inventory
-    for (item in items.values()) {
-      for (link in menuItemIngredients.values()) {
-        if (link.menuItemName == item.saladName) {
-          switch (ingredients.get(link.ingredientId)) {
-            case (?ingredient) {
-              let totalNeeded = item.quantity * link.quantityPerOrder;
-              let newQuantity = if (ingredient.quantityInStock > totalNeeded) {
-                Nat.sub(ingredient.quantityInStock, totalNeeded) } else { 0
-              };
-              let updatedIngredient : Ingredient = {
-                id = ingredient.id;
-                name = ingredient.name;
-                unit = ingredient.unit;
-                quantityInStock = newQuantity;
-                lowStockThreshold = ingredient.lowStockThreshold;
-              };
-              ingredients.add(link.ingredientId, updatedIngredient);
+    // Deduct 1 meal from subscription if active and meals remain
+    switch (subscriptionsV2.get(caller)) {
+      case (?sub) {
+        let now = Time.now();
+        switch (sub.status) {
+          case (#active) {
+            if (sub.saladsRemaining > 0 and sub.expiryDate > now) {
+              let remaining = Nat.sub(sub.saladsRemaining, 1);
+              let newStatus : { #active; #expired } = if (remaining == 0) { #expired } else { #active };
+              subscriptionsV2.add(caller, {
+                user = sub.user;
+                planId = sub.planId;
+                planName = sub.planName;
+                startDate = sub.startDate;
+                expiryDate = sub.expiryDate;
+                status = newStatus;
+                saladsRemaining = remaining;
+              });
             };
-            case (null) {};
+          };
+          case (#expired) {};
+        };
+      };
+      case (null) {};
+    };
+
+    // Deduct ingredients: first try V3 linkedIngredients, then fall back to old menuItemIngredients
+    for (item in items.values()) {
+      var deductedFromV3 = false;
+      // Try V3 linked ingredients
+      for ((_, menuItem) in menuItemsV3.toArray().values()) {
+        if (menuItem.name == item.saladName) {
+          for (link in menuItem.linkedIngredients.values()) {
+            switch (ingredients.get(link.ingredientId)) {
+              case (?ingredient) {
+                let totalNeeded = item.quantity * link.quantityGrams;
+                let newQuantity = if (ingredient.quantityInStock > totalNeeded) {
+                  Nat.sub(ingredient.quantityInStock, totalNeeded)
+                } else { 0 };
+                ingredients.add(link.ingredientId, {
+                  id = ingredient.id;
+                  name = ingredient.name;
+                  unit = ingredient.unit;
+                  quantityInStock = newQuantity;
+                  lowStockThreshold = ingredient.lowStockThreshold;
+                });
+              };
+              case (null) {};
+            };
+          };
+          deductedFromV3 := true;
+        };
+      };
+      // Fallback to old menuItemIngredients
+      if (not deductedFromV3) {
+        for (link in menuItemIngredients.values()) {
+          if (link.menuItemName == item.saladName) {
+            switch (ingredients.get(link.ingredientId)) {
+              case (?ingredient) {
+                let totalNeeded = item.quantity * link.quantityPerOrder;
+                let newQuantity = if (ingredient.quantityInStock > totalNeeded) {
+                  Nat.sub(ingredient.quantityInStock, totalNeeded) } else { 0
+                };
+                ingredients.add(link.ingredientId, {
+                  id = ingredient.id;
+                  name = ingredient.name;
+                  unit = ingredient.unit;
+                  quantityInStock = newQuantity;
+                  lowStockThreshold = ingredient.lowStockThreshold;
+                });
+              };
+              case (null) {};
+            };
           };
         };
       };
@@ -357,7 +523,6 @@ actor {
     orders.add(id, newOrder);
   };
 
-  // Get all orders for the caller
   public query ({ caller }) func getUserOrders() : async [Order] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can view orders");
@@ -365,34 +530,87 @@ actor {
     orders.values().toArray().filter(func(order : Order) : Bool { order.user == caller });
   };
 
-  // Create a subscription for the caller
-  public shared ({ caller }) func createSubscription(planType : PlanType) : async () {
+  // ─── Subscription Plans CRUD ──────────────────────────────────────────────────
+  public query func getAllSubscriptionPlans() : async [SubscriptionPlan] {
+    seedPlans();
+    subscriptionPlans.values().toArray()
+  };
+
+  public shared ({ caller }) func createSubscriptionPlan(
+    name : Text,
+    totalMeals : Nat,
+    price : Nat,
+    validityDays : Nat,
+    description : Text,
+  ) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can create subscription plans");
+    };
+    let id = nextPlanId;
+    nextPlanId += 1;
+    subscriptionPlans.add(id, { id; name; totalMeals; price; validityDays; description });
+    id
+  };
+
+  public shared ({ caller }) func updateSubscriptionPlan(
+    id : Nat,
+    name : Text,
+    totalMeals : Nat,
+    price : Nat,
+    validityDays : Nat,
+    description : Text,
+  ) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update subscription plans");
+    };
+    switch (subscriptionPlans.get(id)) {
+      case (?_) {
+        subscriptionPlans.add(id, { id; name; totalMeals; price; validityDays; description });
+      };
+      case (null) { Runtime.trap("Plan not found") };
+    };
+  };
+
+  public shared ({ caller }) func deleteSubscriptionPlan(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete subscription plans");
+    };
+    subscriptionPlans.remove(id);
+  };
+
+  // ─── User Subscription ────────────────────────────────────────────────────────
+  public shared ({ caller }) func createSubscription(planId : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create subscriptions");
     };
-    let newSubscription : Subscription = {
-      user = caller;
-      planType;
-      startDate = Time.now();
-      status = #active;
-      saladsRemaining = switch (planType) {
-        case (#weekly) { 7 };
-        case (#monthly) { 30 };
+    seedPlans();
+    switch (subscriptionPlans.get(planId)) {
+      case (?plan) {
+        let now = Time.now();
+        // validityDays * 24 * 60 * 60 * 1_000_000_000 nanoseconds
+        let expiryDate = now + plan.validityDays * 86_400_000_000_000;
+        let newSubscription : Subscription = {
+          user = caller;
+          planId;
+          planName = plan.name;
+          startDate = now;
+          expiryDate;
+          status = #active;
+          saladsRemaining = plan.totalMeals;
+        };
+        subscriptionsV2.add(caller, newSubscription);
       };
+      case (null) { Runtime.trap("Subscription plan not found") };
     };
-
-    subscriptions.add(caller, newSubscription);
   };
 
-  // Get the caller's subscription
   public query ({ caller }) func getCallerSubscription() : async ?Subscription {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can view subscriptions");
     };
-    subscriptions.get(caller);
+    subscriptionsV2.get(caller);
   };
 
-  // Register a new user or update profile
   public shared ({ caller }) func registerUser(profile : UserProfile) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can register");
@@ -407,13 +625,10 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // saveUserProfile: upsert profile for the caller.
-  // Auto-registers the user with #user role if not yet registered.
   public shared ({ caller }) func saveUserProfile(profile : UserProfile) : async () {
     if (caller.isAnonymous()) {
       Runtime.trap("Must be authenticated to save profile");
     };
-    // Auto-register with user role if caller has no role yet
     switch (accessControlState.userRoles.get(caller)) {
       case (null) {
         accessControlState.userRoles.add(caller, #user);
@@ -451,16 +666,7 @@ actor {
     };
     let id = nextIngredientId;
     nextIngredientId += 1;
-
-    let ingredient : Ingredient = {
-      id;
-      name;
-      unit;
-      quantityInStock;
-      lowStockThreshold;
-    };
-
-    ingredients.add(id, ingredient);
+    ingredients.add(id, { id; name; unit; quantityInStock; lowStockThreshold });
     id;
   };
 
@@ -470,14 +676,13 @@ actor {
     };
     switch (ingredients.get(id)) {
       case (?ingredient) {
-        let updatedIngredient : Ingredient = {
+        ingredients.add(id, {
           id = ingredient.id;
           name = ingredient.name;
           unit = ingredient.unit;
           quantityInStock = newQuantity;
           lowStockThreshold = ingredient.lowStockThreshold;
-        };
-        ingredients.add(id, updatedIngredient);
+        });
       };
       case (null) {
         Runtime.trap("Ingredient not found");
@@ -489,12 +694,7 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can link ingredients to menu items");
     };
-    let link : MenuItemIngredient = {
-      menuItemName;
-      ingredientId;
-      quantityPerOrder;
-    };
-    menuItemIngredients.add(link);
+    menuItemIngredients.add({ menuItemName; ingredientId; quantityPerOrder });
   };
 
   public query ({ caller }) func getAllIngredients() : async [Ingredient] {
@@ -547,7 +747,7 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all subscriptions");
     };
-    subscriptions.values().toArray();
+    subscriptionsV2.values().toArray();
   };
 
   public shared ({ caller }) func updateOrderStatus(orderId : Nat, status : OrderStatus) : async () {
@@ -556,7 +756,7 @@ actor {
     };
     switch (orders.get(orderId)) {
       case (?order) {
-        let updatedOrder : Order = {
+        orders.add(orderId, {
           id = order.id;
           user = order.user;
           items = order.items;
@@ -564,8 +764,7 @@ actor {
           deliveryType = order.deliveryType;
           status;
           createdAt = order.createdAt;
-        };
-        orders.add(orderId, updatedOrder);
+        });
       };
       case (null) {
         Runtime.trap("Order not found");
@@ -577,16 +776,17 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update subscription status");
     };
-    switch (subscriptions.get(user)) {
+    switch (subscriptionsV2.get(user)) {
       case (?subscription) {
-        let updatedSubscription : Subscription = {
+        subscriptionsV2.add(user, {
           user = subscription.user;
-          planType = subscription.planType;
+          planId = subscription.planId;
+          planName = subscription.planName;
           startDate = subscription.startDate;
+          expiryDate = subscription.expiryDate;
           status;
           saladsRemaining = subscription.saladsRemaining;
-        };
-        subscriptions.add(user, updatedSubscription);
+        });
       };
       case (null) {
         Runtime.trap("Subscription not found");
@@ -595,10 +795,9 @@ actor {
   };
 
 
-  // ─── Menu Management ──────────────────────────────────────────────────────────
-  // Public query: anyone can browse the menu (reads from V2 map with tags)
+  // ─── Menu Management (V3) ─────────────────────────────────────────────────
   public query func getAllMenuItems() : async [MenuItem] {
-    menuItemsV2.values().toArray()
+    menuItemsV3.values().toArray()
   };
 
   public shared ({ caller }) func addMenuItem(
@@ -608,13 +807,15 @@ actor {
     protein : Nat,
     ingredients_ : [Text],
     tags_ : [Text],
+    sizes_ : [BowlSize],
+    linkedIngredients_ : [LinkedIngredient],
   ) : async Nat {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can add menu items");
     };
     let id = nextMenuItemId;
     nextMenuItemId += 1;
-    let item : MenuItem = {
+    menuItemsV3.add(id, {
       id;
       name;
       price;
@@ -623,8 +824,9 @@ actor {
       ingredients = ingredients_;
       tags = tags_;
       enabled = true;
-    };
-    menuItemsV2.add(id, item);
+      sizes = sizes_;
+      linkedIngredients = linkedIngredients_;
+    });
     id
   };
 
@@ -636,13 +838,15 @@ actor {
     protein : Nat,
     ingredients_ : [Text],
     tags_ : [Text],
+    sizes_ : [BowlSize],
+    linkedIngredients_ : [LinkedIngredient],
   ) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update menu items");
     };
-    switch (menuItemsV2.get(id)) {
+    switch (menuItemsV3.get(id)) {
       case (?item) {
-        let updated : MenuItem = {
+        menuItemsV3.add(id, {
           id = item.id;
           name;
           price;
@@ -651,8 +855,9 @@ actor {
           ingredients = ingredients_;
           tags = tags_;
           enabled = item.enabled;
-        };
-        menuItemsV2.add(id, updated);
+          sizes = sizes_;
+          linkedIngredients = linkedIngredients_;
+        });
       };
       case (null) {
         Runtime.trap("Menu item not found");
@@ -664,16 +869,16 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can delete menu items");
     };
-    menuItemsV2.remove(id);
+    menuItemsV3.remove(id);
   };
 
   public shared ({ caller }) func toggleMenuItem(id : Nat, enabled : Bool) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can toggle menu items");
     };
-    switch (menuItemsV2.get(id)) {
+    switch (menuItemsV3.get(id)) {
       case (?item) {
-        let updated : MenuItem = {
+        menuItemsV3.add(id, {
           id = item.id;
           name = item.name;
           price = item.price;
@@ -682,8 +887,9 @@ actor {
           ingredients = item.ingredients;
           tags = item.tags;
           enabled;
-        };
-        menuItemsV2.add(id, updated);
+          sizes = item.sizes;
+          linkedIngredients = item.linkedIngredients;
+        });
       };
       case (null) {
         Runtime.trap("Menu item not found");
@@ -721,15 +927,7 @@ actor {
     };
     let id = nextCouponId;
     nextCouponId += 1;
-    let coupon : Coupon = {
-      id;
-      code;
-      discountType;
-      discountValue;
-      expiryDate;
-      isActive = true;
-    };
-    coupons.add(id, coupon);
+    coupons.add(id, { id; code; discountType; discountValue; expiryDate; isActive = true });
     id
   };
 
@@ -753,21 +951,19 @@ actor {
     };
     switch (coupons.get(id)) {
       case (?c) {
-        let updated : Coupon = {
+        coupons.add(id, {
           id = c.id;
           code = c.code;
           discountType = c.discountType;
           discountValue = c.discountValue;
           expiryDate = c.expiryDate;
           isActive;
-        };
-        coupons.add(id, updated);
+        });
       };
       case (null) { Runtime.trap("Coupon not found") };
     };
   };
 
-  // Public: anyone can validate a coupon code (returns coupon or traps with reason)
   public query func validateCoupon(code : Text) : async Coupon {
     let now = Time.now();
     for ((_, c) in coupons.toArray().values()) {
@@ -944,7 +1140,6 @@ actor {
 
 
   // ─── Customer Management ──────────────────────────────────────────────────────
-
   public type UserNote = {
     id : Nat;
     text : Text;
@@ -1021,23 +1216,19 @@ actor {
   };
 
   // ─── Leads Management ────────────────────────────────────────────────────────
-  // createLead: stores a new lead with name, mobile, current timestamp, status=new_
-  // No auth required — called from free sample popup (anonymous users)
   public shared func createLead(name : Text, mobile : Text) : async Nat {
     let id = nextLeadId;
     nextLeadId += 1;
-    let lead : Lead = {
+    leads.add(id, {
       id;
       name;
       mobile;
       date = Time.now();
       status = #new_;
-    };
-    leads.add(id, lead);
+    });
     id
   };
 
-  // getLeads: returns all leads (admin only)
   public query ({ caller }) func getLeads() : async [Lead] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view leads");
@@ -1045,7 +1236,6 @@ actor {
     leads.values().toArray()
   };
 
-  // updateLeadStatus: updates the status of a lead by ID (admin only)
   public shared ({ caller }) func updateLeadStatus(id : Nat, status : LeadStatus) : async Bool {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update lead status");
