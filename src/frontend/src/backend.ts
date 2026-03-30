@@ -810,6 +810,24 @@ export class Backend implements backendInterface {
         if (this.processError) { try { await this.actor.updateUserProfileByAdmin(user, p); return; } catch(e) { this.processError(e); } }
         await this.actor.updateUserProfileByAdmin(user, p);
     }
+    async createLead(name: string, mobile: string): Promise<bigint> {
+        if (this.processError) { try { return await this.actor.createLead(name, mobile) as bigint; } catch(e) { this.processError(e); throw e; } }
+        return await this.actor.createLead(name, mobile) as bigint;
+    }
+    async getLeads(): Promise<Array<any>> {
+        const raw: any[] = this.processError
+            ? await (async () => { try { return await this.actor.getLeads(); } catch(e) { this.processError!(e); throw new Error('unreachable'); } })()
+            : await this.actor.getLeads() as any[];
+        return raw.map((l: any) => ({
+            id: l.id, name: l.name, mobile: l.mobile, date: l.date,
+            status: 'new_' in l.status ? 'new_' : 'contacted' in l.status ? 'contacted' : 'converted',
+        }));
+    }
+    async updateLeadStatus(id: bigint, status: string): Promise<boolean> {
+        const s: any = status === 'new_' ? { new_: null } : status === 'contacted' ? { contacted: null } : { converted: null };
+        if (this.processError) { try { return await this.actor.updateLeadStatus(id, s); } catch(e) { this.processError(e); throw e; } }
+        return await this.actor.updateLeadStatus(id, s);
+    }
 }
 function from_candid_OrderStatus_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _OrderStatus): OrderStatus {
     return from_candid_variant_n9(_uploadFile, _downloadFile, value);

@@ -127,12 +127,19 @@ actor {
   // Migration flag: ensures we only migrate once
   var menuItemsMigrated = false;
 
-  // ─── Legacy stable vars (kept for upgrade compatibility — do not remove) ──────
-  type LeadStatus = { #new_; #contacted; #converted };
-  type Lead = { id : Nat; name : Text; mobile : Text; date : Time.Time; status : LeadStatus };
+  // ─── Leads ───────────────────────────────────────────────────────────────────
+  public type LeadStatus = { #new_; #contacted; #converted };
+  public type Lead = {
+    id : Nat;
+    name : Text;
+    mobile : Text;
+    date : Time.Time;
+    status : LeadStatus;
+  };
+
   let leads = Map.empty<Nat, Lead>();
   var nextLeadId = 0;
-  // ──────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Migrate data from legacy menuItems (V1, no tags) into menuItemsV2 (with tags)
   system func postupgrade() {
@@ -893,5 +900,51 @@ actor {
     };
     userProfiles.add(user, profile);
   };
+
+  // ─── Leads Management ────────────────────────────────────────────────────────
+  // createLead: stores a new lead with name, mobile, current timestamp, status=new_
+  // No auth required — called from free sample popup (anonymous users)
+  public shared func createLead(name : Text, mobile : Text) : async Nat {
+    let id = nextLeadId;
+    nextLeadId += 1;
+    let lead : Lead = {
+      id;
+      name;
+      mobile;
+      date = Time.now();
+      status = #new_;
+    };
+    leads.add(id, lead);
+    id
+  };
+
+  // getLeads: returns all leads (admin only)
+  public query ({ caller }) func getLeads() : async [Lead] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view leads");
+    };
+    leads.values().toArray()
+  };
+
+  // updateLeadStatus: updates the status of a lead by ID (admin only)
+  public shared ({ caller }) func updateLeadStatus(id : Nat, status : LeadStatus) : async Bool {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update lead status");
+    };
+    switch (leads.get(id)) {
+      case (?lead) {
+        leads.add(id, {
+          id = lead.id;
+          name = lead.name;
+          mobile = lead.mobile;
+          date = lead.date;
+          status;
+        });
+        true
+      };
+      case (null) { false };
+    };
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
 };

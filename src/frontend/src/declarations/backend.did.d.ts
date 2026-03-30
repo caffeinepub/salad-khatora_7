@@ -79,6 +79,15 @@ export interface MenuItem {
   'enabled' : boolean,
 }
 
+export type LeadStatus = { 'new_' : null } | { 'contacted' : null } | { 'converted' : null };
+export interface Lead {
+  'id' : bigint,
+  'name' : string,
+  'mobile' : string,
+  'date' : bigint,
+  'status' : LeadStatus,
+}
+
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
@@ -142,7 +151,9 @@ export interface _SERVICE {
   'getUserMeta' : ActorMethod<[Principal], UserMeta>,
   'deleteUser' : ActorMethod<[Principal], undefined>,
   'updateUserProfileByAdmin' : ActorMethod<[Principal, UserProfile], undefined>,
-
+  'createLead' : ActorMethod<[string, string], bigint>,
+  'getLeads' : ActorMethod<[], Array<Lead>>,
+  'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
 }
 
 export type DiscountType = { 'percentage' : null } | { 'flat' : null };

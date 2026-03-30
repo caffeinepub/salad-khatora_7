@@ -95,7 +95,6 @@ export interface Coupon {
     isActive: boolean;
 }
 
-
 export interface MenuItem {
     id: bigint;
     name: string;
@@ -128,6 +127,15 @@ export interface DeliveryRecord {
     status: DeliveryStatus;
     riderId: bigint | null;
     notes: string;
+}
+
+export type LeadStatus = "new_" | "contacted" | "converted";
+export interface Lead {
+    id: bigint;
+    name: string;
+    mobile: string;
+    date: bigint;
+    status: LeadStatus;
 }
 
 export interface backendInterface {
@@ -187,4 +195,7 @@ export interface backendInterface {
     deleteCoupon(id: bigint): Promise<void>;
     toggleCoupon(id: bigint, isActive: boolean): Promise<void>;
     validateCoupon(code: string): Promise<Coupon>;
+    createLead(name: string, mobile: string): Promise<bigint>;
+    getLeads(): Promise<Array<Lead>>;
+    updateLeadStatus(id: bigint, status: LeadStatus): Promise<boolean>;
 }
