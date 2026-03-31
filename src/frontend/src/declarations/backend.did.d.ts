@@ -74,6 +74,7 @@ export interface MenuItem {
   'protein' : bigint,
   'sizes' : Array<BowlSize>,
   'linkedIngredients' : Array<LinkedIngredient>,
+  'imageUrl' : string,
 }
 export interface MenuItemIngredient {
   'menuItemName' : string,
@@ -152,7 +153,7 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
   'addMenuItem' : ActorMethod<
-    [string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>],
+    [string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>, string],
     bigint
   >,
   'addRider' : ActorMethod<[string, string, string], bigint>,
@@ -215,7 +216,7 @@ export interface _SERVICE {
   'updateIngredientStock' : ActorMethod<[bigint, bigint], undefined>,
   'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
   'updateMenuItem' : ActorMethod<
-    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>],
+    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>, string],
     undefined
   >,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,

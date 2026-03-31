@@ -267,7 +267,20 @@ export default function Menu() {
                       data-ocid={`menu.item.${i + 1}`}
                     >
                       <div className="bg-accent/50 flex items-center justify-center h-36 md:h-48 relative">
-                        <Leaf className="w-16 h-16 text-primary/30" />
+                        {(item as any).imageUrl ? (
+                          <img
+                            src={(item as any).imageUrl}
+                            alt={item.name}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                            }}
+                          />
+                        ) : (
+                          <span className="text-4xl select-none">🥗</span>
+                        )}
                         {(item.tags ?? []).length > 0 && (
                           <div className="absolute top-2 left-2 flex flex-wrap gap-1">
                             {(item.tags ?? []).map((tag) => (

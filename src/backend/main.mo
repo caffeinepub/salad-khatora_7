@@ -142,7 +142,21 @@ actor {
     quantityGrams : Nat;
   };
 
-  // V3 MenuItem — current public type
+  // V3 MenuItem — kept for stable variable compatibility (migration)
+  type MenuItemV3 = {
+    id : Nat;
+    name : Text;
+    price : Nat;
+    calories : Nat;
+    protein : Nat;
+    ingredients : [Text];
+    tags : [Text];
+    enabled : Bool;
+    sizes : [BowlSize];
+    linkedIngredients : [LinkedIngredient];
+  };
+
+  // V4 MenuItem — current public type with imageUrl
   public type MenuItem = {
     id : Nat;
     name : Text;
@@ -154,6 +168,7 @@ actor {
     enabled : Bool;
     sizes : [BowlSize];
     linkedIngredients : [LinkedIngredient];
+    imageUrl : Text;
   };
 
   let userProfiles = Map.empty<Principal, UserProfile>();
@@ -172,14 +187,17 @@ actor {
   // Legacy stable maps kept for migration
   let menuItems = Map.empty<Nat, MenuItemV1>();
   let menuItemsV2 = Map.empty<Nat, MenuItemV2>();
-  // Current V3 map
-  let menuItemsV3 = Map.empty<Nat, MenuItem>();
+  // V3 map (kept for migration)
+  let menuItemsV3 = Map.empty<Nat, MenuItemV3>();
+  // V4 map (current — with imageUrl)
+  let menuItemsV4 = Map.empty<Nat, MenuItem>();
 
   var nextOrderId = 0;
   var nextIngredientId = 0;
   var nextMenuItemId = 0;
   var menuItemsMigrated = false;
   var menuItemsV3Migrated = false;
+  var menuItemsV4Migrated = false;
 
   // ─── Leads ───────────────────────────────────────────────────────────────────
   public type LeadStatus = { #new_; #contacted; #converted };
@@ -361,6 +379,25 @@ actor {
       };
       menuItemsV3Migrated := true;
     };
+    // V3 -> V4 (add imageUrl field)
+    if (not menuItemsV4Migrated) {
+      for ((k, v) in menuItemsV3.toArray().values()) {
+        menuItemsV4.add(k, {
+          id = v.id;
+          name = v.name;
+          price = v.price;
+          calories = v.calories;
+          protein = v.protein;
+          ingredients = v.ingredients;
+          tags = v.tags;
+          enabled = v.enabled;
+          sizes = v.sizes;
+          linkedIngredients = v.linkedIngredients;
+          imageUrl = "";
+        });
+      };
+      menuItemsV4Migrated := true;
+    };
     // Seed default subscription plans
     seedPlans();
     // Migrate V1 subscriptions to V2
@@ -482,7 +519,7 @@ actor {
     for (item in items.values()) {
       var deductedFromV3 = false;
       // Try V3 linked ingredients
-      for ((_, menuItem) in menuItemsV3.toArray().values()) {
+      for ((_, menuItem) in menuItemsV4.toArray().values()) {
         if (menuItem.name == item.saladName) {
           for (link in menuItem.linkedIngredients.values()) {
             switch (ingredients.get(link.ingredientId)) {
@@ -805,9 +842,9 @@ actor {
   };
 
 
-  // ─── Menu Management (V3) ─────────────────────────────────────────────────
+  // ─── Menu Management (V4) ─────────────────────────────────────────────────
   public query func getAllMenuItems() : async [MenuItem] {
-    menuItemsV3.values().toArray()
+    menuItemsV4.values().toArray()
   };
 
   public shared ({ caller }) func addMenuItem(
@@ -819,13 +856,14 @@ actor {
     tags_ : [Text],
     sizes_ : [BowlSize],
     linkedIngredients_ : [LinkedIngredient],
+    imageUrl_ : Text,
   ) : async Nat {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can add menu items");
     };
     let id = nextMenuItemId;
     nextMenuItemId += 1;
-    menuItemsV3.add(id, {
+    menuItemsV4.add(id, {
       id;
       name;
       price;
@@ -836,6 +874,7 @@ actor {
       enabled = true;
       sizes = sizes_;
       linkedIngredients = linkedIngredients_;
+      imageUrl = imageUrl_;
     });
     id
   };
@@ -850,13 +889,14 @@ actor {
     tags_ : [Text],
     sizes_ : [BowlSize],
     linkedIngredients_ : [LinkedIngredient],
+    imageUrl_ : Text,
   ) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update menu items");
     };
-    switch (menuItemsV3.get(id)) {
+    switch (menuItemsV4.get(id)) {
       case (?item) {
-        menuItemsV3.add(id, {
+        menuItemsV4.add(id, {
           id = item.id;
           name;
           price;
@@ -867,6 +907,7 @@ actor {
           enabled = item.enabled;
           sizes = sizes_;
           linkedIngredients = linkedIngredients_;
+          imageUrl = imageUrl_;
         });
       };
       case (null) {
@@ -879,16 +920,16 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can delete menu items");
     };
-    menuItemsV3.remove(id);
+    menuItemsV4.remove(id);
   };
 
   public shared ({ caller }) func toggleMenuItem(id : Nat, enabled : Bool) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can toggle menu items");
     };
-    switch (menuItemsV3.get(id)) {
+    switch (menuItemsV4.get(id)) {
       case (?item) {
-        menuItemsV3.add(id, {
+        menuItemsV4.add(id, {
           id = item.id;
           name = item.name;
           price = item.price;
@@ -899,6 +940,7 @@ actor {
           enabled;
           sizes = item.sizes;
           linkedIngredients = item.linkedIngredients;
+          imageUrl = item.imageUrl;
         });
       };
       case (null) {

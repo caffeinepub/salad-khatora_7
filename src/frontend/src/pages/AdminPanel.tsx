@@ -2408,6 +2408,7 @@ const DEFAULT_SIZES = [
 
 const EMPTY_FORM = {
   name: "",
+  imageUrl: "",
   tags: [] as string[],
   sizes: DEFAULT_SIZES.map((s) => ({ ...s })),
   linkedIngredients: [
@@ -2449,6 +2450,7 @@ function MenuManagementTab() {
   function freshForm() {
     return {
       name: "",
+      imageUrl: "",
       tags: [] as string[],
       sizes: DEFAULT_SIZES.map((s) => ({ ...s })),
       linkedIngredients: [
@@ -2489,6 +2491,7 @@ function MenuManagementTab() {
         : [{ key: 0, ingredientId: "", quantityGrams: "" }];
     setForm({
       name: item.name,
+      imageUrl: (item as any).imageUrl ?? "",
       tags: item.tags ?? [],
       sizes,
       linkedIngredients,
@@ -2618,6 +2621,7 @@ function MenuManagementTab() {
           form.tags,
           sizes,
           linkedIngredients,
+          form.imageUrl,
         );
         setItems((prev) =>
           prev.map((i) =>
@@ -2632,6 +2636,7 @@ function MenuManagementTab() {
                   tags: form.tags,
                   sizes,
                   linkedIngredients,
+                  imageUrl: form.imageUrl,
                 }
               : i,
           ),
@@ -2647,6 +2652,7 @@ function MenuManagementTab() {
           form.tags,
           sizes,
           linkedIngredients,
+          form.imageUrl,
         );
         setItems((prev) => [
           ...prev,
@@ -2661,6 +2667,7 @@ function MenuManagementTab() {
             enabled: true,
             sizes,
             linkedIngredients,
+            imageUrl: form.imageUrl,
           },
         ]);
         toast.success("Salad added");
@@ -2748,6 +2755,35 @@ function MenuManagementTab() {
                 className="mt-1"
                 data-ocid="menu.input"
               />
+            </div>
+
+            {/* Image URL */}
+            <div>
+              <Label htmlFor="menu-image" className="text-sm font-medium">
+                Image URL (optional)
+              </Label>
+              <Input
+                id="menu-image"
+                placeholder="https://example.com/salad.jpg"
+                value={form.imageUrl}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, imageUrl: e.target.value }))
+                }
+                className="mt-1"
+                data-ocid="menu.image_input"
+              />
+              {form.imageUrl && (
+                <div className="mt-2">
+                  <img
+                    src={form.imageUrl}
+                    alt="Preview"
+                    className="h-24 w-full object-cover rounded-lg border border-border"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Bowl Sizes */}

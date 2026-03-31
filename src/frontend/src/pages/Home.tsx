@@ -3,8 +3,10 @@ import Navbar from "@/components/Navbar";
 import ReviewForm from "@/components/ReviewForm";
 import ReviewsCarousel from "@/components/ReviewsCarousel";
 import { Button } from "@/components/ui/button";
+import { useActor } from "@/hooks/useActor";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle } from "lucide-react";
+import { ArrowRight, CheckCircle, ShoppingCart } from "lucide-react";
 import { motion } from "motion/react";
 
 const steps = [
@@ -53,6 +55,22 @@ const benefits = [
 ];
 
 export default function Home() {
+  const { actor, isFetching } = useActor();
+  const { data: featuredItems = [] } = useQuery({
+    queryKey: ["featuredMenuItems"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        const items = await actor.getAllMenuItems();
+        return items.filter((i) => i.enabled).slice(0, 3);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: 5 * 60 * 1000,
+  });
+
   return (
     <div className="min-h-screen flex flex-col font-poppins">
       <Navbar />
@@ -232,6 +250,91 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Featured Salads */}
+      {featuredItems.length > 0 && (
+        <section className="py-16 md:py-20 bg-white" data-ocid="home.section">
+          <div className="max-w-6xl mx-auto px-4">
+            <motion.div
+              className="text-center mb-12"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+                Our Bestsellers
+              </h2>
+              <p className="text-muted-foreground max-w-lg mx-auto">
+                Fresh, flavour-packed bowls loved by our customers
+              </p>
+            </motion.div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {featuredItems.map((item, i) => (
+                <motion.div
+                  key={item.id.toString()}
+                  className="bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
+                  data-ocid={`home.featured.item.${i + 1}`}
+                >
+                  <div className="h-40 bg-accent/50 relative flex items-center justify-center">
+                    {(item as any).imageUrl ? (
+                      <img
+                        src={(item as any).imageUrl}
+                        alt={item.name}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-4xl select-none">🥗</span>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-bold text-foreground text-base mb-1">
+                      {item.name}
+                    </h3>
+                    <p className="text-primary font-semibold text-sm mb-3">
+                      from ₹
+                      {(item as any).sizes.length > 0
+                        ? Math.min(
+                            ...(item as any).sizes.map((s) => Number(s.price)),
+                          ).toString()
+                        : item.price.toString()}
+                    </p>
+                    <Link to="/menu">
+                      <Button
+                        size="sm"
+                        className="w-full rounded-full bg-primary text-white text-xs hover:bg-primary/90 gap-1"
+                        data-ocid={`home.featured.button.${i + 1}`}
+                      >
+                        <ShoppingCart className="w-3 h-3" />
+                        Order Now
+                      </Button>
+                    </Link>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <div className="text-center mt-8">
+              <Link to="/menu">
+                <Button
+                  variant="outline"
+                  className="rounded-full border-primary text-primary hover:bg-accent px-8"
+                  data-ocid="home.menu.link"
+                >
+                  View Full Menu <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Customer Reviews Carousel */}
       <ReviewsCarousel />

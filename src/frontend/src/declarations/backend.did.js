@@ -89,6 +89,7 @@ export const MenuItem = IDL.Record({
   'protein' : IDL.Nat,
   'sizes' : IDL.Vec(BowlSize),
   'linkedIngredients' : IDL.Vec(LinkedIngredient),
+  'imageUrl' : IDL.Text,
 });
 export const OrderStatus = IDL.Variant({
   'pending' : IDL.Null,
@@ -183,6 +184,7 @@ export const idlService = IDL.Service({
         IDL.Vec(IDL.Text),
         IDL.Vec(BowlSize),
         IDL.Vec(LinkedIngredient),
+        IDL.Text,
       ],
       [IDL.Nat],
       [],
@@ -276,6 +278,7 @@ export const idlService = IDL.Service({
         IDL.Vec(IDL.Text),
         IDL.Vec(BowlSize),
         IDL.Vec(LinkedIngredient),
+        IDL.Text,
       ],
       [],
       [],
@@ -376,6 +379,7 @@ export const idlFactory = ({ IDL }) => {
     'protein' : IDL.Nat,
     'sizes' : IDL.Vec(BowlSize),
     'linkedIngredients' : IDL.Vec(LinkedIngredient),
+    'imageUrl' : IDL.Text,
   });
   const OrderStatus = IDL.Variant({
     'pending' : IDL.Null,
@@ -470,6 +474,7 @@ export const idlFactory = ({ IDL }) => {
           IDL.Vec(IDL.Text),
           IDL.Vec(BowlSize),
           IDL.Vec(LinkedIngredient),
+          IDL.Text,
         ],
         [IDL.Nat],
         [],
@@ -563,6 +568,7 @@ export const idlFactory = ({ IDL }) => {
           IDL.Vec(IDL.Text),
           IDL.Vec(BowlSize),
           IDL.Vec(LinkedIngredient),
+          IDL.Text,
         ],
         [],
         [],

@@ -102,6 +102,7 @@ export interface MenuItem {
     protein: bigint;
     sizes: Array<BowlSize>;
     linkedIngredients: Array<LinkedIngredient>;
+    imageUrl: string;
 }
 export interface UserNote {
     id: bigint;
@@ -199,7 +200,7 @@ export enum Variant_active_expired {
 }
 export interface backendInterface {
     addIngredient(name: string, unit: string, quantityInStock: bigint, lowStockThreshold: bigint): Promise<bigint>;
-    addMenuItem(name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>): Promise<bigint>;
+    addMenuItem(name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>, imageUrl: string): Promise<bigint>;
     addRider(name: string, mobile: string, area: string): Promise<bigint>;
     addUserNote(user: Principal, text: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
@@ -256,7 +257,7 @@ export interface backendInterface {
     updateDeliveryStatus(id: bigint, status: DeliveryStatus): Promise<void>;
     updateIngredientStock(id: bigint, newQuantity: bigint): Promise<void>;
     updateLeadStatus(id: bigint, status: LeadStatus): Promise<boolean>;
-    updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>): Promise<void>;
+    updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>, imageUrl: string): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;
     updateRider(id: bigint, name: string, mobile: string, area: string): Promise<void>;
