@@ -93,7 +93,6 @@ import {
   type MenuItem,
   type Order,
   OrderStatus,
-  PlanType,
   type Review,
   ReviewStatus,
   type Rider,
@@ -797,14 +796,14 @@ function UserDetailSheet({
 
   const getSubExpiry = () => {
     if (!userSub) return null;
-    const days = userSub.planType === PlanType.monthly ? 30 : 7;
-    const expiry =
-      Number(userSub.startDate) / 1_000_000 + days * 24 * 60 * 60 * 1000;
-    return new Date(expiry).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    return new Date(Number(userSub.expiryDate) / 1_000_000).toLocaleDateString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      },
+    );
   };
 
   return (
@@ -966,9 +965,7 @@ function UserDetailSheet({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Plan</span>
                     <Badge className="bg-primary/10 text-primary border-primary/20 capitalize">
-                      {userSub.planType === PlanType.monthly
-                        ? "Monthly"
-                        : "Weekly"}
+                      {userSub.planName}
                     </Badge>
                   </div>
                   <div className="flex justify-between">
@@ -1745,7 +1742,7 @@ function SubscriptionsTab() {
   };
 
   const getPlanName = (sub: Subscription) => {
-    return sub.planType === PlanType.monthly ? "Monthly" : "Weekly";
+    return sub.planName;
   };
 
   const getLowMeals = (sub: Subscription) => {

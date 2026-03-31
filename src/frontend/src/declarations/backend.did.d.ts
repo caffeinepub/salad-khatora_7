@@ -126,9 +126,10 @@ export interface Subscription {
     { 'expired' : null },
   'saladsRemaining' : bigint,
   'user' : Principal,
-  'planType' : { 'monthly' : null } |
-    { 'weekly' : null },
+  'planId' : bigint,
+  'planName' : string,
   'startDate' : Time,
+  'expiryDate' : Time,
 }
 export type Time = bigint;
 export interface UserMeta { 'notes' : Array<UserNote>, 'isVip' : boolean }
@@ -167,7 +168,7 @@ export interface _SERVICE {
   >,
   'createLead' : ActorMethod<[string, string], bigint>,
   'createReview' : ActorMethod<[string, bigint, string], Result>,
-  'createSubscription' : ActorMethod<[PlanType], undefined>,
+  'createSubscription' : ActorMethod<[bigint], undefined>,
   'deleteCoupon' : ActorMethod<[bigint], undefined>,
   'deleteMenuItem' : ActorMethod<[bigint], undefined>,
   'deleteReview' : ActorMethod<[string], Result_1>,

@@ -8,7 +8,7 @@ import { Loader2, Package, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { useAuth } from "../auth-context";
-import { OrderStatus, PlanType, Variant_active_expired } from "../backend";
+import { OrderStatus, Variant_active_expired } from "../backend";
 import { useUserOrders, useUserSubscription } from "../hooks/useQueries";
 
 function formatDate(ts: bigint) {
@@ -56,6 +56,9 @@ export default function Dashboard() {
 
   const userName = currentUser?.name || "there";
 
+  // Resolve plan display name from planName field (v42+) or fallback
+  const planDisplayName = subscription?.planName || "Active Plan";
+
   return (
     <div className="min-h-screen flex flex-col font-poppins bg-background">
       <Navbar />
@@ -100,12 +103,13 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="font-semibold text-foreground text-base">
-                    {subscription.planType === PlanType.monthly
-                      ? "Monthly Plan"
-                      : "Weekly Plan"}
+                    {planDisplayName}
                   </p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     Started {formatDate(subscription.startDate)}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Expires {formatDate(subscription.expiryDate)}
                   </p>
                 </div>
                 <Badge
@@ -122,7 +126,7 @@ export default function Dashboard() {
               </div>
               <div className="bg-accent rounded-xl px-4 py-3">
                 <p className="text-sm text-muted-foreground">
-                  Salads remaining:{" "}
+                  Meals remaining:{" "}
                   <span className="font-bold text-primary text-lg">
                     {Number(subscription.saladsRemaining)}
                   </span>
@@ -226,15 +230,15 @@ export default function Dashboard() {
                         key={item.saladName}
                         className="text-xs text-muted-foreground"
                       >
-                        {item.saladName} ×{Number(item.quantity)} —{" "}
+                        {item.saladName} \u00d7{Number(item.quantity)} \u2014{" "}
                         <span className="text-primary font-medium">
-                          ₹{Number(item.price)}
+                          \u20b9{Number(item.price)}
                         </span>
                       </p>
                     ))}
                   </div>
                   <p className="text-sm font-bold text-foreground mt-2">
-                    Total: ₹{Number(order.totalAmount)}
+                    Total: \u20b9{Number(order.totalAmount)}
                   </p>
                 </div>
               ))}

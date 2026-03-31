@@ -1,10 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  DeliveryType,
-  OrderItem,
-  PlanType,
-  UserProfile,
-} from "../backend";
+import type { DeliveryType, OrderItem, UserProfile } from "../backend";
 import { useActor } from "./useActor";
 
 const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 30000);
@@ -69,10 +64,7 @@ export function useSubscriptionPlans() {
     queryKey: ["subscriptionPlans"],
     queryFn: async () => {
       if (!actor) return [];
-      // backend.ts is stale; cast to any to call the v42 canister method
-      return (actor as any).getAllSubscriptionPlans() as Promise<
-        SubscriptionPlan[]
-      >;
+      return actor.getAllSubscriptionPlans();
     },
     enabled: !!actor && !isFetching,
     staleTime: 5 * 60 * 1000,
@@ -131,21 +123,21 @@ export function usePlaceOrder() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["userSubscription"] });
     },
     retry: 2,
     retryDelay,
   });
 }
 
-// Accepts planId (bigint) as the v42 canister expects; backend.ts still shows PlanType
+// Creates a subscription with the given planId
 export function useCreateSubscription() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (planId: bigint | PlanType) => {
+    mutationFn: async (planId: bigint) => {
       if (!actor) throw new Error("Not authenticated");
-      // Cast to any — canister v42 accepts planId: bigint
-      return (actor as any).createSubscription(planId);
+      return actor.createSubscription(planId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userSubscription"] });

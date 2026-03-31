@@ -5,10 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "@tanstack/react-router";
-import { CalendarDays, Leaf, Loader2, Sparkles, Utensils } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Leaf,
+  Loader2,
+  Sparkles,
+  Utensils,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
-import { PlanType, Variant_active_expired } from "../backend";
+import { Variant_active_expired } from "../backend";
 import type { SubscriptionPlan } from "../hooks/useQueries";
 import {
   useCreateSubscription,
@@ -33,17 +40,6 @@ function getBestValueId(plans: SubscriptionPlan[]): bigint | null {
   return best.id;
 }
 
-// Resolve a display name from either the new planName field or the legacy planType enum
-function resolveSubscriptionLabel(sub: {
-  planType?: PlanType;
-  planName?: string;
-}): string {
-  if (sub.planName) return sub.planName;
-  if (sub.planType === PlanType.monthly) return "Monthly Plan";
-  if (sub.planType === PlanType.weekly) return "Weekly Plan";
-  return "Active Plan";
-}
-
 export default function Subscription() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -52,6 +48,8 @@ export default function Subscription() {
   const createSub = useCreateSubscription();
 
   const bestValueId = getBestValueId(plans);
+  const hasActivePlan =
+    !!subscription && subscription.status === Variant_active_expired.active;
 
   const handleSubscribe = async (plan: SubscriptionPlan) => {
     if (!isAuthenticated) {
@@ -59,20 +57,22 @@ export default function Subscription() {
       navigate({ to: "/login" });
       return;
     }
+
+    // Prevent duplicate active subscriptions
+    if (hasActivePlan) {
+      toast.warning(
+        "You already have an active plan. It must expire before subscribing to a new one.",
+      );
+      return;
+    }
+
     try {
       await createSub.mutateAsync(plan.id);
-      toast.success(
-        `${plan.name} activated! Enjoy your fresh salads \uD83E\uDD57`,
-      );
+      toast.success("Subscription activated successfully");
     } catch {
       toast.error("Failed to subscribe. Please try again.");
     }
   };
-
-  // Sub may have new (planName) or legacy (planType) shape depending on canister version
-  const subAny = subscription as
-    | (typeof subscription & { planName?: string })
-    | null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -113,10 +113,13 @@ export default function Subscription() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold text-foreground">
-                    {resolveSubscriptionLabel(subAny ?? {})}
+                    {subscription.planName || "Active Plan"}
                   </p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     Started {formatDate(subscription.startDate)}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Expires {formatDate(subscription.expiryDate)}
                   </p>
                   <p className="text-sm text-primary font-semibold mt-1">
                     {Number(subscription.saladsRemaining)} meals remaining
@@ -134,6 +137,17 @@ export default function Subscription() {
                     : "Expired"}
                 </Badge>
               </div>
+
+              {/* Warning banner if active plan */}
+              {hasActivePlan && (
+                <div className="mt-4 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
+                  <p className="text-sm text-yellow-800">
+                    You have an active plan. You can subscribe to a new plan
+                    once this one expires.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ) : null}
@@ -241,12 +255,14 @@ export default function Subscription() {
                     <CardContent className="pt-3 pb-6">
                       <Button
                         onClick={() => handleSubscribe(plan)}
-                        disabled={createSub.isPending}
+                        disabled={createSub.isPending || hasActivePlan}
                         data-ocid={`subscription.item.${idx + 1}.primary_button`}
                         className={`w-full h-12 rounded-xl font-semibold text-base transition-all ${
-                          isBestValue
-                            ? "bg-primary text-white hover:bg-primary/90 shadow-md shadow-primary/25"
-                            : "bg-secondary text-primary border border-primary/30 hover:bg-accent"
+                          hasActivePlan
+                            ? "bg-muted text-muted-foreground cursor-not-allowed"
+                            : isBestValue
+                              ? "bg-primary text-white hover:bg-primary/90 shadow-md shadow-primary/25"
+                              : "bg-secondary text-primary border border-primary/30 hover:bg-accent"
                         }`}
                       >
                         {createSub.isPending ? (
@@ -254,8 +270,8 @@ export default function Subscription() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                             Subscribing...
                           </span>
-                        ) : subscription ? (
-                          "Switch to This Plan"
+                        ) : hasActivePlan ? (
+                          "Plan Active"
                         ) : (
                           "Buy Plan"
                         )}

@@ -12,9 +12,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
-import { DiscountType } from "../backend";
+import { DiscountType, Variant_active_expired } from "../backend";
 import type { Coupon } from "../backend";
-import { usePlaceOrder } from "../hooks/useQueries";
+import { usePlaceOrder, useUserSubscription } from "../hooks/useQueries";
 
 type DeliveryOption = "instant" | "scheduled" | "";
 
@@ -24,6 +24,7 @@ export default function Cart() {
   const { isAuthenticated } = useAuth();
   const placeOrder = usePlaceOrder();
   const { actor } = useActor();
+  const { data: userSubscription } = useUserSubscription();
 
   const [delivery, setDelivery] = useState<DeliveryOption>("");
   const [schedDate, setSchedDate] = useState("");
@@ -34,7 +35,17 @@ export default function Cart() {
 
   const isScheduleValid =
     delivery !== "scheduled" || (schedDate !== "" && schedTime !== "");
-  const canOrder = delivery !== "" && isScheduleValid && items.length > 0;
+
+  const subscriptionEnded =
+    userSubscription != null &&
+    (Number(userSubscription.saladsRemaining) <= 0 ||
+      userSubscription.status === Variant_active_expired.expired);
+
+  const canOrder =
+    delivery !== "" &&
+    isScheduleValid &&
+    items.length > 0 &&
+    !subscriptionEnded;
 
   const discount = appliedCoupon
     ? appliedCoupon.discountType === DiscountType.percentage
@@ -381,6 +392,24 @@ export default function Cart() {
                   </div>
                 </div>
 
+                {subscriptionEnded && (
+                  <div
+                    className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium mt-5 mb-3"
+                    data-ocid="cart.error_state"
+                  >
+                    <span>
+                      ⚠️ Your subscription has ended, please renew to continue
+                      ordering.
+                    </span>
+                    <a
+                      href="/subscription"
+                      className="ml-auto underline whitespace-nowrap text-red-600 hover:text-red-800"
+                    >
+                      Renew
+                    </a>
+                  </div>
+                )}
+
                 <Button
                   className="w-full mt-5 rounded-full bg-primary text-white hover:bg-primary/90 h-12 text-base font-semibold disabled:opacity-50"
                   disabled={!canOrder || placeOrder.isPending}
@@ -396,7 +425,7 @@ export default function Cart() {
                     "Place Order"
                   )}
                 </Button>
-                {!delivery && (
+                {!subscriptionEnded && !delivery && (
                   <p className="text-xs text-center text-muted-foreground mt-2">
                     Select a delivery option to continue
                   </p>

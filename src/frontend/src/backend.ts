@@ -150,8 +150,18 @@ export interface Subscription {
     status: Variant_active_expired;
     saladsRemaining: bigint;
     user: Principal;
-    planType: PlanType;
+    planId: bigint;
+    planName: string;
     startDate: Time;
+    expiryDate: Time;
+}
+export interface SubscriptionPlan {
+    id: bigint;
+    name: string;
+    totalMeals: bigint;
+    price: bigint;
+    validityDays: bigint;
+    description: string;
 }
 export interface MenuItem {
     id: bigint;
@@ -271,7 +281,7 @@ export interface backendInterface {
     createDelivery(orderId: bigint, customerName: string, address: string, deliveryTime: Time, notes: string): Promise<bigint>;
     createLead(name: string, mobile: string): Promise<bigint>;
     createReview(userName: string, rating: bigint, comment: string): Promise<Result>;
-    createSubscription(planType: PlanType): Promise<void>;
+    createSubscription(planId: bigint): Promise<void>;
     deleteCoupon(id: bigint): Promise<void>;
     deleteMenuItem(id: bigint): Promise<void>;
     deleteReview(id: string): Promise<Result_1>;
@@ -285,6 +295,7 @@ export interface backendInterface {
     getAllOrders(): Promise<Array<Order>>;
     getAllReviews(): Promise<Array<Review>>;
     getAllRiders(): Promise<Array<Rider>>;
+    getAllSubscriptionPlans(): Promise<Array<SubscriptionPlan>>;
     getAllSubscriptions(): Promise<Array<Subscription>>;
     getAllUsers(): Promise<Array<{
         principal: Principal;
@@ -323,7 +334,7 @@ export interface backendInterface {
     updateUserProfileByAdmin(user: Principal, profile: UserProfile): Promise<void>;
     validateCoupon(code: string): Promise<Coupon>;
 }
-import type { Coupon as _Coupon, DeliveryRecord as _DeliveryRecord, DeliveryStatus as _DeliveryStatus, DeliveryType as _DeliveryType, DiscountType as _DiscountType, Lead as _Lead, LeadStatus as _LeadStatus, Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, PlanType as _PlanType, Result as _Result, Result_1 as _Result_1, Review as _Review, ReviewStatus as _ReviewStatus, Subscription as _Subscription, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { Coupon as _Coupon, DeliveryRecord as _DeliveryRecord, DeliveryStatus as _DeliveryStatus, DeliveryType as _DeliveryType, DiscountType as _DiscountType, Lead as _Lead, LeadStatus as _LeadStatus, Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, Result as _Result, Result_1 as _Result_1, Review as _Review, ReviewStatus as _ReviewStatus, Subscription as _Subscription, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -508,17 +519,17 @@ export class Backend implements backendInterface {
             return from_candid_Result_n5(this._uploadFile, this._downloadFile, result);
         }
     }
-    async createSubscription(arg0: PlanType): Promise<void> {
+    async createSubscription(arg0: bigint): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.createSubscription(to_candid_PlanType_n11(this._uploadFile, this._downloadFile, arg0));
+                const result = await this.actor.createSubscription(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createSubscription(to_candid_PlanType_n11(this._uploadFile, this._downloadFile, arg0));
+            const result = await this.actor.createSubscription(arg0);
             return result;
         }
     }
@@ -701,6 +712,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getAllRiders();
+            return result;
+        }
+    }
+    async getAllSubscriptionPlans(): Promise<Array<SubscriptionPlan>> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).getAllSubscriptionPlans();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).getAllSubscriptionPlans();
             return result;
         }
     }
@@ -1334,25 +1359,27 @@ function from_candid_record_n35(_uploadFile: (file: ExternalBlob) => Promise<Uin
     };
     saladsRemaining: bigint;
     user: Principal;
-    planType: {
-        monthly: null;
-    } | {
-        weekly: null;
-    };
+    planId: bigint;
+    planName: string;
     startDate: _Time;
+    expiryDate: _Time;
 }): {
     status: Variant_active_expired;
     saladsRemaining: bigint;
     user: Principal;
-    planType: PlanType;
+    planId: bigint;
+    planName: string;
     startDate: Time;
+    expiryDate: Time;
 } {
     return {
         status: from_candid_variant_n36(_uploadFile, _downloadFile, value.status),
         saladsRemaining: value.saladsRemaining,
         user: value.user,
-        planType: from_candid_variant_n37(_uploadFile, _downloadFile, value.planType),
-        startDate: value.startDate
+        planId: value.planId,
+        planName: value.planName,
+        startDate: value.startDate,
+        expiryDate: value.expiryDate,
     };
 }
 function from_candid_record_n44(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -1481,13 +1508,6 @@ function from_candid_variant_n36(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): Variant_active_expired {
     return "active" in value ? Variant_active_expired.active : "expired" in value ? Variant_active_expired.expired : value;
 }
-function from_candid_variant_n37(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    monthly: null;
-} | {
-    weekly: null;
-}): PlanType {
-    return "monthly" in value ? PlanType.monthly : "weekly" in value ? PlanType.weekly : value;
-}
 function from_candid_variant_n41(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     admin: null;
 } | {
@@ -1558,25 +1578,11 @@ function to_candid_LeadStatus_n51(_uploadFile: (file: ExternalBlob) => Promise<U
 function to_candid_OrderStatus_n53(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: OrderStatus): _OrderStatus {
     return to_candid_variant_n54(_uploadFile, _downloadFile, value);
 }
-function to_candid_PlanType_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: PlanType): _PlanType {
-    return to_candid_variant_n12(_uploadFile, _downloadFile, value);
-}
 function to_candid_ReviewStatus_n55(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: ReviewStatus): _ReviewStatus {
     return to_candid_variant_n56(_uploadFile, _downloadFile, value);
 }
 function to_candid_UserRole_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {
     return to_candid_variant_n2(_uploadFile, _downloadFile, value);
-}
-function to_candid_variant_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: PlanType): {
-    monthly: null;
-} | {
-    weekly: null;
-} {
-    return value == PlanType.monthly ? {
-        monthly: null
-    } : value == PlanType.weekly ? {
-        weekly: null
-    } : value;
 }
 function to_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {
     admin: null;

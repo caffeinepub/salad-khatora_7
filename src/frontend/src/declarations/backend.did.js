@@ -119,8 +119,10 @@ export const Subscription = IDL.Record({
   'status' : IDL.Variant({ 'active' : IDL.Null, 'expired' : IDL.Null }),
   'saladsRemaining' : IDL.Nat,
   'user' : IDL.Principal,
-  'planType' : IDL.Variant({ 'monthly' : IDL.Null, 'weekly' : IDL.Null }),
+  'planId' : IDL.Nat,
+  'planName' : IDL.Text,
   'startDate' : Time,
+  'expiryDate' : Time,
 });
 export const UserProfile = IDL.Record({
   'age' : IDL.Nat,
@@ -203,7 +205,7 @@ export const idlService = IDL.Service({
     ),
   'createLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
   'createReview' : IDL.Func([IDL.Text, IDL.Nat, IDL.Text], [Result], []),
-  'createSubscription' : IDL.Func([PlanType], [], []),
+  'createSubscription' : IDL.Func([IDL.Nat], [], []),
   'deleteCoupon' : IDL.Func([IDL.Nat], [], []),
   'deleteMenuItem' : IDL.Func([IDL.Nat], [], []),
   'deleteReview' : IDL.Func([IDL.Text], [Result_1], []),
@@ -321,7 +323,6 @@ export const idlFactory = ({ IDL }) => {
     'rating' : IDL.Nat,
   });
   const Result = IDL.Variant({ 'ok' : Review, 'err' : IDL.Text });
-  const PlanType = IDL.Variant({ 'monthly' : IDL.Null, 'weekly' : IDL.Null });
   const Result_1 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
   const Coupon = IDL.Record({
     'id' : IDL.Nat,
@@ -405,8 +406,10 @@ export const idlFactory = ({ IDL }) => {
     'status' : IDL.Variant({ 'active' : IDL.Null, 'expired' : IDL.Null }),
     'saladsRemaining' : IDL.Nat,
     'user' : IDL.Principal,
-    'planType' : IDL.Variant({ 'monthly' : IDL.Null, 'weekly' : IDL.Null }),
+    'planId' : IDL.Nat,
+    'planName' : IDL.Text,
     'startDate' : Time,
+    'expiryDate' : Time,
   });
   const UserProfile = IDL.Record({
     'age' : IDL.Nat,
@@ -489,7 +492,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'createLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
     'createReview' : IDL.Func([IDL.Text, IDL.Nat, IDL.Text], [Result], []),
-    'createSubscription' : IDL.Func([PlanType], [], []),
+    'createSubscription' : IDL.Func([IDL.Nat], [], []),
     'deleteCoupon' : IDL.Func([IDL.Nat], [], []),
     'deleteMenuItem' : IDL.Func([IDL.Nat], [], []),
     'deleteReview' : IDL.Func([IDL.Text], [Result_1], []),

@@ -429,6 +429,16 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can place orders");
     };
+    // Block order if subscription exists but meals are exhausted
+    switch (subscriptionsV2.get(caller)) {
+      case (?sub) {
+        let now = Time.now();
+        if (sub.saladsRemaining == 0 or sub.status == #expired or sub.expiryDate <= now) {
+          Runtime.trap("Your subscription has ended, please renew it to continue ordering.");
+        };
+      };
+      case (null) {};
+    };
     let id = nextOrderId;
     nextOrderId += 1;
 
