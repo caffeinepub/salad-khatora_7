@@ -2,6 +2,7 @@ import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Loader2, Package, Star } from "lucide-react";
@@ -9,7 +10,11 @@ import { motion } from "motion/react";
 import { useEffect } from "react";
 import { useAuth } from "../auth-context";
 import { OrderStatus, Variant_active_expired } from "../backend";
-import { useUserOrders, useUserSubscription } from "../hooks/useQueries";
+import {
+  useSubscriptionPlans,
+  useUserOrders,
+  useUserSubscription,
+} from "../hooks/useQueries";
 
 function formatDate(ts: bigint) {
   return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-IN", {
@@ -39,6 +44,7 @@ export default function Dashboard() {
   const { isAuthenticated, isInitializing, currentUser } = useAuth();
   const { data: orders, isLoading: ordersLoading } = useUserOrders();
   const { data: subscription, isLoading: subLoading } = useUserSubscription();
+  const { data: plans = [] } = useSubscriptionPlans();
 
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
@@ -59,6 +65,21 @@ export default function Dashboard() {
   // Resolve plan display name from planName field (v42+) or fallback
   const planDisplayName = subscription?.planName || "Active Plan";
 
+  // Progress bar values
+  const planTotalMeals = subscription
+    ? plans.find((p) => p.id === subscription.planId)?.totalMeals
+    : undefined;
+  const mealTotal = planTotalMeals ? Number(planTotalMeals) : 0;
+  const mealRemaining = subscription ? Number(subscription.saladsRemaining) : 0;
+  const mealUsed = mealTotal > 0 ? mealTotal - mealRemaining : 0;
+  const mealProgressPct = mealTotal > 0 ? (mealRemaining / mealTotal) * 100 : 0;
+  const mealBarColor =
+    mealRemaining === 0
+      ? "[&>div]:bg-red-500"
+      : mealRemaining <= 3
+        ? "[&>div]:bg-orange-500"
+        : "[&>div]:bg-green-500";
+
   return (
     <div className="min-h-screen flex flex-col font-poppins bg-background">
       <Navbar />
@@ -75,7 +96,7 @@ export default function Dashboard() {
             Welcome back, {userName}! 👋
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Here's an overview of your account.
+            Here&apos;s an overview of your account.
           </p>
         </motion.div>
 
@@ -124,14 +145,34 @@ export default function Dashboard() {
                     : "Expired"}
                 </Badge>
               </div>
+
+              {/* Meal Progress Bar */}
               <div className="bg-accent rounded-xl px-4 py-3">
-                <p className="text-sm text-muted-foreground">
-                  Meals remaining:{" "}
-                  <span className="font-bold text-primary text-lg">
-                    {Number(subscription.saladsRemaining)}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    {mealTotal > 0
+                      ? `${mealUsed} / ${mealTotal} meals used`
+                      : "Meals remaining"}
                   </span>
-                </p>
+                  <span
+                    className={`text-xs font-bold ${
+                      mealRemaining === 0
+                        ? "text-red-600"
+                        : mealRemaining <= 3
+                          ? "text-orange-600"
+                          : "text-primary"
+                    }`}
+                  >
+                    {mealRemaining} remaining
+                  </span>
+                </div>
+                <Progress
+                  value={mealProgressPct}
+                  className={`h-3 transition-all duration-700 ${mealBarColor}`}
+                  data-ocid="dashboard.loading_state"
+                />
               </div>
+
               <Link to="/subscription" className="block mt-3">
                 <Button
                   size="sm"
@@ -230,15 +271,15 @@ export default function Dashboard() {
                         key={item.saladName}
                         className="text-xs text-muted-foreground"
                       >
-                        {item.saladName} \u00d7{Number(item.quantity)} \u2014{" "}
+                        {item.saladName} &times;{Number(item.quantity)} &mdash;{" "}
                         <span className="text-primary font-medium">
-                          \u20b9{Number(item.price)}
+                          &#8377;{Number(item.price)}
                         </span>
                       </p>
                     ))}
                   </div>
                   <p className="text-sm font-bold text-foreground mt-2">
-                    Total: \u20b9{Number(order.totalAmount)}
+                    Total: &#8377;{Number(order.totalAmount)}
                   </p>
                 </div>
               ))}

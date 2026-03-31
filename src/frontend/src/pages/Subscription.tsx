@@ -3,6 +3,7 @@ import Navbar from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -50,6 +51,21 @@ export default function Subscription() {
   const bestValueId = getBestValueId(plans);
   const hasActivePlan =
     !!subscription && subscription.status === Variant_active_expired.active;
+
+  // Progress bar values for current subscription
+  const activePlanData = subscription
+    ? plans.find((p) => p.id === subscription.planId)
+    : undefined;
+  const subTotal = activePlanData ? Number(activePlanData.totalMeals) : 0;
+  const subRemaining = subscription ? Number(subscription.saladsRemaining) : 0;
+  const subUsed = subTotal > 0 ? subTotal - subRemaining : 0;
+  const subProgressPct = subTotal > 0 ? (subRemaining / subTotal) * 100 : 0;
+  const subBarColor =
+    subRemaining === 0
+      ? "[&>div]:bg-red-500"
+      : subRemaining <= 3
+        ? "[&>div]:bg-orange-500"
+        : "[&>div]:bg-green-500";
 
   const handleSubscribe = async (plan: SubscriptionPlan) => {
     if (!isAuthenticated) {
@@ -110,8 +126,8 @@ export default function Subscription() {
               className="bg-accent rounded-2xl p-5 border border-primary/20"
               data-ocid="subscription.card"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex-1 min-w-0">
                   <p className="font-bold text-foreground">
                     {subscription.planName || "Active Plan"}
                   </p>
@@ -120,9 +136,6 @@ export default function Subscription() {
                   </p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     Expires {formatDate(subscription.expiryDate)}
-                  </p>
-                  <p className="text-sm text-primary font-semibold mt-1">
-                    {Number(subscription.saladsRemaining)} meals remaining
                   </p>
                 </div>
                 <Badge
@@ -136,6 +149,33 @@ export default function Subscription() {
                     ? "Active"
                     : "Expired"}
                 </Badge>
+              </div>
+
+              {/* Meal Progress Bar */}
+              <div className="bg-background/60 rounded-xl px-4 py-3 border border-primary/10">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    {subTotal > 0
+                      ? `${subUsed} / ${subTotal} meals used`
+                      : "Meals remaining"}
+                  </span>
+                  <span
+                    className={`text-xs font-bold ${
+                      subRemaining === 0
+                        ? "text-red-600"
+                        : subRemaining <= 3
+                          ? "text-orange-600"
+                          : "text-primary"
+                    }`}
+                  >
+                    {subRemaining} remaining
+                  </span>
+                </div>
+                <Progress
+                  value={subProgressPct}
+                  className={`h-3 transition-all duration-700 ${subBarColor}`}
+                  data-ocid="subscription.loading_state"
+                />
               </div>
 
               {/* Warning banner if active plan */}
