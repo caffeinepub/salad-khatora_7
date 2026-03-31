@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext } from "react";
+import { createContext, useCallback, useContext, useRef } from "react";
 import type { UserProfile } from "./backend";
 import { useActor } from "./hooks/useActor";
 import type { ConnectionStatus } from "./hooks/useConnectionManager";
@@ -27,9 +27,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!identity && !identity.getPrincipal().isAnonymous();
 
-  // On reconnect, only invalidate data queries — never the actor itself.
-  // Invalidating the actor causes it to recreate which floods all queries.
+  // Throttle reconnect invalidations to at most once every 15 seconds
+  const lastReconnectRef = useRef(0);
   const handleReconnect = useCallback(() => {
+    const now = Date.now();
+    if (now - lastReconnectRef.current < 15000) return;
+    lastReconnectRef.current = now;
+    // Only invalidate data queries — never the actor itself.
+    // Invalidating the actor causes it to recreate which floods all queries.
     queryClient.invalidateQueries({
       predicate: (query) => query.queryKey[0] !== "actor",
     });

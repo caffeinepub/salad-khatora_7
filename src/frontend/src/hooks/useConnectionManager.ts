@@ -29,6 +29,8 @@ export function useConnectionManager(
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actorRef = useRef(actor);
   const onReconnectRef = useRef(onReconnect);
+  // Guard against concurrent health checks
+  const isCheckingRef = useRef(false);
 
   useEffect(() => {
     actorRef.current = actor;
@@ -41,6 +43,9 @@ export function useConnectionManager(
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(async () => {
       if (!actorRef.current) return;
+      // Skip if a previous check is still in-flight
+      if (isCheckingRef.current) return;
+      isCheckingRef.current = true;
       try {
         // Lightweight public query — never requires auth, never traps
         await actorRef.current.hasAdminBeenClaimed();
@@ -63,6 +68,8 @@ export function useConnectionManager(
           setConnectionStatus("reconnecting");
           scheduleNext(RECOVERY_INTERVAL_MS);
         }
+      } finally {
+        isCheckingRef.current = false;
       }
     }, delay);
   }, []);
