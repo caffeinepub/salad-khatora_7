@@ -47,6 +47,29 @@ actor {
     #delivered;
   };
 
+  // ─── Delivery Status (shared between Order and DeliveryRecord) ─────────────
+  public type DeliveryStatus = {
+    #preparing;
+    #ready;
+    #outForDelivery;
+    #delivered;
+  };
+
+  // V1 Order type — kept for stable variable migration only
+  type OrderV1 = {
+    id : Nat;
+    user : Principal;
+    items : [OrderItem];
+    totalAmount : Nat;
+    deliveryType : {
+      #instant;
+      #scheduled : Time.Time;
+    };
+    status : OrderStatus;
+    createdAt : Time.Time;
+  };
+
+  // V2 Order — single source of truth including delivery tracking fields
   public type Order = {
     id : Nat;
     user : Principal;
@@ -57,6 +80,10 @@ actor {
       #scheduled : Time.Time;
     };
     status : OrderStatus;
+    deliveryStatus : DeliveryStatus;
+    assignedRiderId : ?Nat;
+    deliveryTime : ?Time.Time;
+    deliveryNotes : Text;
     createdAt : Time.Time;
   };
 
@@ -172,7 +199,12 @@ actor {
   };
 
   let userProfiles = Map.empty<Principal, UserProfile>();
-  let orders = Map.empty<Nat, Order>();
+  // V1 orders — stable variable kept for migration only
+  let orders = Map.empty<Nat, OrderV1>();
+  // V2 orders — single source of truth with delivery fields
+  let ordersV2 = Map.empty<Nat, Order>();
+  var ordersV2Migrated = false;
+
   // Legacy stable variable — keeps old type to avoid compatibility error
   let subscriptions = Map.empty<Principal, SubscriptionV1>();
   // V2 stable variable with new Subscription type
@@ -432,6 +464,28 @@ actor {
       };
       subscriptionsMigrated := true;
     };
+    // Migrate V1 orders to V2 (add delivery fields with defaults)
+    if (not ordersV2Migrated) {
+      for ((k, v) in orders.toArray().values()) {
+        // Only migrate if not already in V2
+        if (ordersV2.get(k) == null) {
+          ordersV2.add(k, {
+            id = v.id;
+            user = v.user;
+            items = v.items;
+            totalAmount = v.totalAmount;
+            deliveryType = v.deliveryType;
+            status = v.status;
+            deliveryStatus = #preparing;
+            assignedRiderId = null;
+            deliveryTime = null;
+            deliveryNotes = "";
+            createdAt = v.createdAt;
+          });
+        };
+      };
+      ordersV2Migrated := true;
+    };
   };
 
   public type DeliveryType = {
@@ -461,7 +515,7 @@ actor {
     firstAdminClaimed := true;
   };
 
-  // Place an order — deducts 1 meal from active subscription if available
+  // Place an order — writes to ordersV2 with delivery fields, deducts 1 meal from subscription
   public shared ({ caller }) func placeOrder(items : [OrderItem], totalAmount : Nat, deliveryType : DeliveryType) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can place orders");
@@ -486,6 +540,10 @@ actor {
       totalAmount;
       deliveryType;
       status = #pending;
+      deliveryStatus = #preparing;
+      assignedRiderId = null;
+      deliveryTime = null;
+      deliveryNotes = "";
       createdAt = Time.now();
     };
 
@@ -567,14 +625,14 @@ actor {
       };
     };
 
-    orders.add(id, newOrder);
+    ordersV2.add(id, newOrder);
   };
 
   public query ({ caller }) func getUserOrders() : async [Order] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can view orders");
     };
-    orders.values().toArray().filter(func(order : Order) : Bool { order.user == caller });
+    ordersV2.values().toArray().filter(func(order : Order) : Bool { order.user == caller });
   };
 
   // ─── Subscription Plans CRUD ──────────────────────────────────────────────────
@@ -776,7 +834,7 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all orders");
     };
-    orders.values().toArray();
+    ordersV2.values().toArray();
   };
 
   public query ({ caller }) func getAllUsers() : async [{ principal : Principal; profile : UserProfile }] {
@@ -801,21 +859,98 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update order status");
     };
-    switch (orders.get(orderId)) {
+    switch (ordersV2.get(orderId)) {
       case (?order) {
-        orders.add(orderId, {
+        ordersV2.add(orderId, {
           id = order.id;
           user = order.user;
           items = order.items;
           totalAmount = order.totalAmount;
           deliveryType = order.deliveryType;
           status;
+          deliveryStatus = order.deliveryStatus;
+          assignedRiderId = order.assignedRiderId;
+          deliveryTime = order.deliveryTime;
+          deliveryNotes = order.deliveryNotes;
           createdAt = order.createdAt;
         });
       };
       case (null) {
         Runtime.trap("Order not found");
       };
+    };
+  };
+
+  // ─── Delivery Updates on Orders (unified source of truth) ────────────────────
+  public shared ({ caller }) func updateOrderDeliveryStatus(orderId : Nat, deliveryStatus : DeliveryStatus) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update delivery status");
+    };
+    switch (ordersV2.get(orderId)) {
+      case (?order) {
+        ordersV2.add(orderId, {
+          id = order.id;
+          user = order.user;
+          items = order.items;
+          totalAmount = order.totalAmount;
+          deliveryType = order.deliveryType;
+          status = order.status;
+          deliveryStatus;
+          assignedRiderId = order.assignedRiderId;
+          deliveryTime = order.deliveryTime;
+          deliveryNotes = order.deliveryNotes;
+          createdAt = order.createdAt;
+        });
+      };
+      case (null) { Runtime.trap("Order not found") };
+    };
+  };
+
+  public shared ({ caller }) func assignOrderRider(orderId : Nat, riderId : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can assign riders");
+    };
+    switch (ordersV2.get(orderId)) {
+      case (?order) {
+        ordersV2.add(orderId, {
+          id = order.id;
+          user = order.user;
+          items = order.items;
+          totalAmount = order.totalAmount;
+          deliveryType = order.deliveryType;
+          status = order.status;
+          deliveryStatus = order.deliveryStatus;
+          assignedRiderId = ?riderId;
+          deliveryTime = order.deliveryTime;
+          deliveryNotes = order.deliveryNotes;
+          createdAt = order.createdAt;
+        });
+      };
+      case (null) { Runtime.trap("Order not found") };
+    };
+  };
+
+  public shared ({ caller }) func updateOrderDeliveryNotes(orderId : Nat, notes : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update delivery notes");
+    };
+    switch (ordersV2.get(orderId)) {
+      case (?order) {
+        ordersV2.add(orderId, {
+          id = order.id;
+          user = order.user;
+          items = order.items;
+          totalAmount = order.totalAmount;
+          deliveryType = order.deliveryType;
+          status = order.status;
+          deliveryStatus = order.deliveryStatus;
+          assignedRiderId = order.assignedRiderId;
+          deliveryTime = order.deliveryTime;
+          deliveryNotes = notes;
+          createdAt = order.createdAt;
+        });
+      };
+      case (null) { Runtime.trap("Order not found") };
     };
   };
 
@@ -1033,7 +1168,7 @@ actor {
   };
 
 
-  // ─── Delivery Management ─────────────────────────────────────────────────────
+  // ─── Delivery Management — Rider CRUD (kept for rider assignment) ─────────────
   public type Rider = {
     id : Nat;
     name : Text;
@@ -1041,13 +1176,7 @@ actor {
     area : Text;
   };
 
-  public type DeliveryStatus = {
-    #preparing;
-    #ready;
-    #outForDelivery;
-    #delivered;
-  };
-
+  // Legacy DeliveryRecord type — kept for stable variable compatibility only
   public type DeliveryRecord = {
     id : Nat;
     orderId : Nat;
@@ -1061,6 +1190,7 @@ actor {
 
   let riders = Map.empty<Nat, Rider>();
   var nextRiderId = 0;
+  // Legacy stable var — kept for compatibility, no longer written to
   let deliveryRecords = Map.empty<Nat, DeliveryRecord>();
   var nextDeliveryId = 0;
 
@@ -1098,6 +1228,7 @@ actor {
     riders.values().toArray()
   };
 
+  // Legacy delivery functions — kept for interface compatibility
   public shared ({ caller }) func createDelivery(
     orderId : Nat,
     customerName : Text,

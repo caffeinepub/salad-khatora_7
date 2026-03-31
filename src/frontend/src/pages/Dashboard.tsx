@@ -9,7 +9,11 @@ import { Loader2, Package, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { useAuth } from "../auth-context";
-import { OrderStatus, Variant_active_expired } from "../backend";
+import {
+  DeliveryStatus,
+  OrderStatus,
+  Variant_active_expired,
+} from "../backend";
 import {
   useSubscriptionPlans,
   useUserOrders,
@@ -38,6 +42,76 @@ const statusConfig: Record<OrderStatus, { label: string; color: string }> = {
     color: "bg-green-100 text-green-800",
   },
 };
+
+const deliverySteps = [
+  { key: DeliveryStatus.preparing, label: "Preparing" },
+  { key: DeliveryStatus.ready, label: "Ready" },
+  { key: DeliveryStatus.outForDelivery, label: "On the way" },
+  { key: DeliveryStatus.delivered, label: "Delivered" },
+];
+
+function DeliveryTimeline({
+  deliveryStatus,
+}: {
+  deliveryStatus: DeliveryStatus;
+}) {
+  const activeIndex = deliverySteps.findIndex((s) => s.key === deliveryStatus);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-xs text-muted-foreground mb-2 font-medium">
+        Delivery Status
+      </p>
+      <div className="flex items-center gap-0">
+        {deliverySteps.map((step, i) => {
+          const isPast = i < activeIndex;
+          const isActive = i === activeIndex;
+          const isFuture = i > activeIndex;
+          return (
+            <div
+              key={step.key}
+              className="flex items-center flex-1 last:flex-none"
+            >
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 transition-colors ${
+                    isActive
+                      ? "bg-primary text-white ring-2 ring-primary/30"
+                      : isPast
+                        ? "bg-green-400 text-white"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {isPast ? "✓" : i + 1}
+                </div>
+                <span
+                  className={`text-[9px] text-center leading-tight w-14 ${
+                    isActive
+                      ? "text-primary font-semibold"
+                      : isPast
+                        ? "text-green-600"
+                        : isFuture
+                          ? "text-muted-foreground"
+                          : ""
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {i < deliverySteps.length - 1 && (
+                <div
+                  className={`h-0.5 flex-1 mx-0.5 mb-3.5 ${
+                    i < activeIndex ? "bg-green-400" : "bg-muted"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -281,6 +355,12 @@ export default function Dashboard() {
                   <p className="text-sm font-bold text-foreground mt-2">
                     Total: &#8377;{Number(order.totalAmount)}
                   </p>
+                  {/* Delivery Timeline */}
+                  <DeliveryTimeline
+                    deliveryStatus={
+                      (order as any).deliveryStatus ?? DeliveryStatus.preparing
+                    }
+                  />
                 </div>
               ))}
             </div>

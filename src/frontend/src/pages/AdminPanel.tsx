@@ -85,7 +85,6 @@ import { toast } from "sonner";
 import { useAuth } from "../auth-context";
 import {
   type Coupon,
-  type DeliveryRecord,
   DeliveryStatus,
   DiscountType,
   type Ingredient,
@@ -99,6 +98,13 @@ import {
   type Subscription,
   Variant_active_expired,
 } from "../backend";
+
+// Extended Order type with delivery fields from the new backend API
+type ExtendedOrder = Order & {
+  deliveryStatus?: DeliveryStatus;
+  assignedRiderId?: bigint;
+  deliveryNotes?: string;
+};
 
 function formatDate(ts: bigint) {
   return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-IN", {
@@ -3404,14 +3410,22 @@ function OffersTab() {
 // ─── Delivery Tab ─────────────────────────────────────────────────────────────
 function DeliveryTab() {
   const { actor } = useActor();
-  const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
+  const [orders, setOrders] = useState<ExtendedOrder[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"today" | "scheduled" | "pending">(
-    "today",
-  );
-  const [selectedIds, setSelectedIds] = useState<Set<bigint>>(new Set());
-  const [bulkRiderId, setBulkRiderId] = useState<string>("");
+  const [filter, setFilter] = useState<
+    | "all"
+    | "active"
+    | "outForDelivery"
+    | "delivered"
+    | "unassigned"
+    | "assigned"
+  >("all");
+  const [selectedOrders, setSelectedOrders] = useState<Set<bigint>>(new Set());
+  const [bulkRiderId, setBulkRiderId] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [groupByLocation, setGroupByLocation] = useState(false);
 
   // Add rider form
   const [newRider, setNewRider] = useState({ name: "", mobile: "", area: "" });
@@ -3425,107 +3439,104 @@ function DeliveryTab() {
     area: "",
   });
 
-  // Create delivery form
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newDelivery, setNewDelivery] = useState({
-    orderId: "",
-    customerName: "",
-    address: "",
-    deliveryTime: "",
-    notes: "",
-  });
-  const [creatingDelivery, setCreatingDelivery] = useState(false);
-
   useEffect(() => {
     if (!actor) return;
     setLoading(true);
-    Promise.all([actor.getAllDeliveries(), actor.getAllRiders()])
-      .then(([dels, rids]) => {
-        setDeliveries(dels);
+    Promise.all([
+      actor.getAllOrders() as unknown as Promise<ExtendedOrder[]>,
+      actor.getAllRiders(),
+      actor.getAllUsers() as unknown as Promise<UserRecord[]>,
+    ])
+      .then(([ords, rids, usrs]) => {
+        setOrders(ords);
         setRiders(rids);
+        setUsers(usrs);
       })
       .catch(() => toast.error("Failed to load delivery data"))
       .finally(() => setLoading(false));
   }, [actor]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(today);
-  todayEnd.setHours(23, 59, 59, 999);
+  const getUserName = (userPrincipal: { toString(): string }): string => {
+    const match = users.find(
+      (u) => u.principal.toString() === userPrincipal.toString(),
+    );
+    return match?.profile?.name || truncatePrincipal(userPrincipal);
+  };
 
-  const getDeliveryDate = (d: DeliveryRecord) =>
-    new Date(Number(d.deliveryTime) / 1_000_000);
-
-  const filteredDeliveries = deliveries.filter((d) => {
-    const dt = getDeliveryDate(d);
-    if (filter === "today") return dt >= today && dt <= todayEnd;
-    if (filter === "scheduled") return dt > todayEnd;
-    if (filter === "pending")
+  const filteredOrders = orders.filter((o) => {
+    const status = o.deliveryStatus ?? DeliveryStatus.preparing;
+    if (filter === "active")
       return (
-        d.status === DeliveryStatus.preparing ||
-        d.status === DeliveryStatus.ready
+        status === DeliveryStatus.preparing || status === DeliveryStatus.ready
       );
+    if (filter === "outForDelivery")
+      return status === DeliveryStatus.outForDelivery;
+    if (filter === "delivered") return status === DeliveryStatus.delivered;
+    if (filter === "unassigned") return !o.assignedRiderId;
+    if (filter === "assigned") return !!o.assignedRiderId;
     return true;
   });
 
-  const totalToday = deliveries.filter((d) => {
-    const dt = getDeliveryDate(d);
-    return dt >= today && dt <= todayEnd;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    setSelectedOrders(new Set());
+  }, [filter]);
+
+  const totalCount = orders.length;
+  const activeCount = orders.filter((o) => {
+    const s = o.deliveryStatus ?? DeliveryStatus.preparing;
+    return s === DeliveryStatus.preparing || s === DeliveryStatus.ready;
   }).length;
-  const pendingCount = deliveries.filter(
-    (d) =>
-      d.status === DeliveryStatus.preparing ||
-      d.status === DeliveryStatus.ready,
+  const outForDeliveryCount = orders.filter(
+    (o) =>
+      (o.deliveryStatus ?? DeliveryStatus.preparing) ===
+      DeliveryStatus.outForDelivery,
   ).length;
-  const completedCount = deliveries.filter(
-    (d) => d.status === DeliveryStatus.delivered,
+  const deliveredCount = orders.filter(
+    (o) =>
+      (o.deliveryStatus ?? DeliveryStatus.preparing) ===
+      DeliveryStatus.delivered,
   ).length;
+  const unassignedCount = orders.filter((o) => !o.assignedRiderId).length;
+  const assignedCount = orders.filter((o) => !!o.assignedRiderId).length;
 
-  const _statusBadge = (status: DeliveryStatus) => {
-    const map = {
-      [DeliveryStatus.preparing]: "bg-amber-100 text-amber-700",
-      [DeliveryStatus.ready]: "bg-blue-100 text-blue-700",
-      [DeliveryStatus.outForDelivery]: "bg-purple-100 text-purple-700",
-      [DeliveryStatus.delivered]: "bg-green-100 text-green-700",
-    };
-    const labels = {
-      [DeliveryStatus.preparing]: "Preparing",
-      [DeliveryStatus.ready]: "Ready",
-      [DeliveryStatus.outForDelivery]: "Out for Delivery",
-      [DeliveryStatus.delivered]: "Delivered",
-    };
-    return (
-      <span
-        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status]}`}
-      >
-        {labels[status]}
-      </span>
-    );
-  };
+  // Rider workload map
+  const riderWorkload = new Map<string, number>();
+  for (const r of riders) {
+    const count = orders.filter(
+      (o) =>
+        o.assignedRiderId === r.id &&
+        (o.deliveryStatus ?? DeliveryStatus.preparing) !==
+          DeliveryStatus.delivered,
+    ).length;
+    riderWorkload.set(String(r.id), count);
+  }
 
-  const toggleSelect = (id: bigint) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredDeliveries.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredDeliveries.map((d) => d.id)));
+  const groupedOrders = (): { area: string; orders: ExtendedOrder[] }[] => {
+    const map = new Map<string, ExtendedOrder[]>();
+    for (const o of filteredOrders) {
+      const rider = o.assignedRiderId
+        ? riders.find((r) => r.id === o.assignedRiderId)
+        : undefined;
+      const area = rider?.area || "Unassigned";
+      if (!map.has(area)) map.set(area, []);
+      map.get(area)!.push(o);
     }
+    return Array.from(map.entries()).map(([area, aOrders]) => ({
+      area,
+      orders: aOrders,
+    }));
   };
 
-  const handleStatusChange = async (id: bigint, status: DeliveryStatus) => {
+  const handleDeliveryStatusChange = async (
+    orderId: bigint,
+    deliveryStatus: DeliveryStatus,
+  ) => {
     if (!actor) return;
     try {
-      await actor.updateDeliveryStatus(id, status);
-      setDeliveries((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, status } : d)),
+      await (actor as any).updateOrderDeliveryStatus(orderId, deliveryStatus);
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, deliveryStatus } : o)),
       );
       toast.success("Status updated");
     } catch (_e) {
@@ -3533,13 +3544,13 @@ function DeliveryTab() {
     }
   };
 
-  const handleAssignRider = async (deliveryId: bigint, riderId: string) => {
-    if (!actor) return;
+  const handleAssignOrderRider = async (orderId: bigint, riderId: string) => {
+    if (!actor || !riderId) return;
     try {
-      await actor.assignRider(deliveryId, BigInt(riderId));
-      setDeliveries((prev) =>
-        prev.map((d) =>
-          d.id === deliveryId ? { ...d, riderId: BigInt(riderId) } : d,
+      await (actor as any).assignOrderRider(orderId, BigInt(riderId));
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId ? { ...o, assignedRiderId: BigInt(riderId) } : o,
         ),
       );
       toast.success("Rider assigned");
@@ -3548,28 +3559,29 @@ function DeliveryTab() {
     }
   };
 
-  const handleNoteBlur = async (id: bigint, notes: string) => {
-    if (!actor) return;
+  const handleBulkAssign = async () => {
+    if (!bulkRiderId || selectedOrders.size === 0) return;
+    setBulkAssigning(true);
+    const ids = Array.from(selectedOrders);
     try {
-      await actor.updateDeliveryNote(id, notes);
+      await Promise.all(
+        ids.map((id) => handleAssignOrderRider(id, bulkRiderId)),
+      );
+      setSelectedOrders(new Set());
+      setBulkRiderId("");
     } catch (_e) {
-      toast.error("Failed to save note");
+      toast.error("Bulk assign failed");
+    } finally {
+      setBulkAssigning(false);
     }
   };
 
-  const handleBulkAssign = async () => {
-    if (!actor || !bulkRiderId || selectedIds.size === 0) return;
+  const handleDeliveryNoteBlur = async (orderId: bigint, notes: string) => {
+    if (!actor) return;
     try {
-      await actor.bulkAssignRider(Array.from(selectedIds), BigInt(bulkRiderId));
-      const rId = BigInt(bulkRiderId);
-      setDeliveries((prev) =>
-        prev.map((d) => (selectedIds.has(d.id) ? { ...d, riderId: rId } : d)),
-      );
-      setSelectedIds(new Set());
-      setBulkRiderId("");
-      toast.success(`Assigned rider to ${selectedIds.size} orders`);
+      await (actor as any).updateOrderDeliveryNotes(orderId, notes);
     } catch (_e) {
-      toast.error("Bulk assign failed");
+      toast.error("Failed to save note");
     }
   };
 
@@ -3627,47 +3639,178 @@ function DeliveryTab() {
     }
   };
 
-  const handleCreateDelivery = async () => {
-    if (!actor || !newDelivery.orderId || !newDelivery.customerName) return;
-    setCreatingDelivery(true);
-    try {
-      const dtMs = newDelivery.deliveryTime
-        ? new Date(newDelivery.deliveryTime).getTime()
-        : Date.now();
-      const dtNs = BigInt(dtMs) * 1_000_000n;
-      const id = await actor.createDelivery(
-        BigInt(newDelivery.orderId),
-        newDelivery.customerName,
-        newDelivery.address,
-        dtNs,
-        newDelivery.notes,
-      );
-      const newRec: DeliveryRecord = {
-        id,
-        orderId: BigInt(newDelivery.orderId),
-        customerName: newDelivery.customerName,
-        address: newDelivery.address,
-        deliveryTime: dtNs,
-        status: DeliveryStatus.preparing,
-        riderId: undefined,
-        notes: newDelivery.notes,
-      };
-      setDeliveries((prev) => [newRec, ...prev]);
-      setNewDelivery({
-        orderId: "",
-        customerName: "",
-        address: "",
-        deliveryTime: "",
-        notes: "",
-      });
-      setShowCreateForm(false);
-      toast.success("Delivery created");
-    } catch (_e) {
-      toast.error("Failed to create delivery");
-    } finally {
-      setCreatingDelivery(false);
-    }
+  const statusBadge = (status: DeliveryStatus) => {
+    const colorMap: Record<DeliveryStatus, string> = {
+      [DeliveryStatus.preparing]: "bg-amber-100 text-amber-700",
+      [DeliveryStatus.ready]: "bg-blue-100 text-blue-700",
+      [DeliveryStatus.outForDelivery]: "bg-purple-100 text-purple-700",
+      [DeliveryStatus.delivered]: "bg-green-100 text-green-700",
+    };
+    const labelMap: Record<DeliveryStatus, string> = {
+      [DeliveryStatus.preparing]: "Preparing",
+      [DeliveryStatus.ready]: "Ready",
+      [DeliveryStatus.outForDelivery]: "Out for Delivery",
+      [DeliveryStatus.delivered]: "Delivered",
+    };
+    return (
+      <span
+        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${colorMap[status]}`}
+      >
+        {labelMap[status]}
+      </span>
+    );
   };
+
+  const toggleSelectOrder = (id: bigint) => {
+    setSelectedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const OrdersTable = ({ orderList }: { orderList: ExtendedOrder[] }) => (
+    <div className="overflow-x-auto">
+      <Table data-ocid="delivery.table">
+        <TableHeader>
+          <TableRow className="bg-muted/30">
+            <TableHead className="w-8">
+              <Checkbox
+                checked={
+                  orderList.length > 0 &&
+                  orderList.every((o) => selectedOrders.has(o.id))
+                }
+                onCheckedChange={() => {
+                  const allSelected = orderList.every((o) =>
+                    selectedOrders.has(o.id),
+                  );
+                  setSelectedOrders((prev) => {
+                    const next = new Set(prev);
+                    if (allSelected) {
+                      for (const o of orderList) next.delete(o.id);
+                    } else {
+                      for (const o of orderList) next.add(o.id);
+                    }
+                    return next;
+                  });
+                }}
+                data-ocid="delivery.checkbox"
+              />
+            </TableHead>
+            <TableHead className="text-xs">Order ID</TableHead>
+            <TableHead className="text-xs">Customer</TableHead>
+            <TableHead className="text-xs hidden md:table-cell">
+              Items
+            </TableHead>
+            <TableHead className="text-xs">Amount</TableHead>
+            <TableHead className="text-xs">Status</TableHead>
+            <TableHead className="text-xs">Rider</TableHead>
+            <TableHead className="text-xs hidden lg:table-cell">
+              Notes
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orderList.map((order, idx) => {
+            const currentStatus =
+              order.deliveryStatus ?? DeliveryStatus.preparing;
+            return (
+              <TableRow
+                key={String(order.id)}
+                data-ocid={`delivery.item.${idx + 1}`}
+                className={selectedOrders.has(order.id) ? "bg-primary/5" : ""}
+              >
+                <TableCell>
+                  <Checkbox
+                    checked={selectedOrders.has(order.id)}
+                    onCheckedChange={() => toggleSelectOrder(order.id)}
+                    data-ocid="delivery.checkbox"
+                  />
+                </TableCell>
+                <TableCell className="text-xs font-mono text-muted-foreground">
+                  #{Number(order.id)}
+                </TableCell>
+                <TableCell className="text-sm font-medium">
+                  {getUserName(order.user)}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground hidden md:table-cell max-w-40 truncate">
+                  {order.items.map((it) => it.saladName).join(", ")}
+                </TableCell>
+                <TableCell className="text-sm font-semibold">
+                  ₹{Number(order.totalAmount)}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1.5">
+                    {statusBadge(currentStatus)}
+                    <Select
+                      value={currentStatus}
+                      onValueChange={(v) =>
+                        handleDeliveryStatusChange(
+                          order.id,
+                          v as DeliveryStatus,
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-36 h-7 text-xs"
+                        data-ocid="delivery.select"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={DeliveryStatus.preparing}>
+                          Preparing
+                        </SelectItem>
+                        <SelectItem value={DeliveryStatus.ready}>
+                          Ready
+                        </SelectItem>
+                        <SelectItem value={DeliveryStatus.outForDelivery}>
+                          Out for Delivery
+                        </SelectItem>
+                        <SelectItem value={DeliveryStatus.delivered}>
+                          Delivered
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={
+                      order.assignedRiderId ? String(order.assignedRiderId) : ""
+                    }
+                    onValueChange={(v) => handleAssignOrderRider(order.id, v)}
+                  >
+                    <SelectTrigger
+                      className="w-28 h-7 text-xs"
+                      data-ocid="delivery.select"
+                    >
+                      <SelectValue placeholder="Assign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {riders.map((r) => (
+                        <SelectItem key={String(r.id)} value={String(r.id)}>
+                          {r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  <DeliveryNoteCell
+                    key={String(order.id)}
+                    defaultValue={order.deliveryNotes ?? ""}
+                    onBlur={(notes) => handleDeliveryNoteBlur(order.id, notes)}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -3680,16 +3823,37 @@ function DeliveryTab() {
 
   return (
     <div className="space-y-6" data-ocid="delivery.section">
-      {/* Dashboard Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Truck className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold">Deliveries</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => setGroupByLocation((v) => !v)}
+          data-ocid="delivery.toggle"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+            groupByLocation
+              ? "bg-primary text-white border-primary"
+              : "bg-white text-muted-foreground border-border hover:bg-muted/50"
+          }`}
+        >
+          <MapPin className="w-3.5 h-3.5" />
+          Group by Area
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-gray-50 to-slate-50">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100">
-              <Truck className="w-5 h-5 text-green-600" />
+            <div className="p-2 rounded-lg bg-gray-100">
+              <Package className="w-5 h-5 text-gray-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Today</p>
-              <p className="text-2xl font-bold text-green-700">{totalToday}</p>
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-2xl font-bold text-gray-700">{totalCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -3699,159 +3863,81 @@ function DeliveryTab() {
               <Clock className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Pending</p>
-              <p className="text-2xl font-bold text-amber-700">
-                {pendingCount}
-              </p>
+              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-2xl font-bold text-amber-700">{activeCount}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-50">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-50 to-violet-50">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+            <div className="p-2 rounded-lg bg-purple-100">
+              <Truck className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Completed</p>
-              <p className="text-2xl font-bold text-blue-700">
-                {completedCount}
+              <p className="text-xs text-muted-foreground">Out for Delivery</p>
+              <p className="text-2xl font-bold text-purple-700">
+                {outForDeliveryCount}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-100">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Delivered</p>
+              <p className="text-2xl font-bold text-green-700">
+                {deliveredCount}
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters + Create Button */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          {(["today", "scheduled", "pending"] as const).map((f) => (
-            <Button
-              key={f}
-              variant={filter === f ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter(f)}
-              className={filter === f ? "bg-primary text-white" : ""}
-              data-ocid={`delivery.${f}.tab`}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </Button>
-          ))}
-        </div>
-        <Button
-          size="sm"
-          className="bg-primary text-white"
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          data-ocid="delivery.open_modal_button"
-        >
-          <ClipboardList className="w-4 h-4 mr-1.5" />
-          Add Delivery
-        </Button>
+      {/* Filter Pills */}
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ["all", `All (${totalCount})`],
+            ["active", `Active (${activeCount})`],
+            ["outForDelivery", `Out for Delivery (${outForDeliveryCount})`],
+            ["delivered", `Delivered (${deliveredCount})`],
+            ["unassigned", `Unassigned (${unassignedCount})`],
+            ["assigned", `Assigned (${assignedCount})`],
+          ] as const
+        ).map(([f, label]) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            data-ocid="delivery.tab"
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              filter === f
+                ? "bg-primary text-white"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Create Delivery Form */}
-      {showCreateForm && (
-        <Card className="border shadow-sm" data-ocid="delivery.modal">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Create New Delivery</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Order ID</Label>
-              <Input
-                placeholder="Order ID"
-                value={newDelivery.orderId}
-                onChange={(e) =>
-                  setNewDelivery((p) => ({ ...p, orderId: e.target.value }))
-                }
-                data-ocid="delivery.input"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Customer Name</Label>
-              <Input
-                placeholder="Customer name"
-                value={newDelivery.customerName}
-                onChange={(e) =>
-                  setNewDelivery((p) => ({
-                    ...p,
-                    customerName: e.target.value,
-                  }))
-                }
-                data-ocid="delivery.input"
-              />
-            </div>
-            <div className="space-y-1 col-span-2">
-              <Label className="text-xs">Address</Label>
-              <Input
-                placeholder="Delivery address"
-                value={newDelivery.address}
-                onChange={(e) =>
-                  setNewDelivery((p) => ({ ...p, address: e.target.value }))
-                }
-                data-ocid="delivery.input"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Delivery Time</Label>
-              <Input
-                type="datetime-local"
-                value={newDelivery.deliveryTime}
-                onChange={(e) =>
-                  setNewDelivery((p) => ({
-                    ...p,
-                    deliveryTime: e.target.value,
-                  }))
-                }
-                data-ocid="delivery.input"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes</Label>
-              <Input
-                placeholder="Gym name, instructions..."
-                value={newDelivery.notes}
-                onChange={(e) =>
-                  setNewDelivery((p) => ({ ...p, notes: e.target.value }))
-                }
-                data-ocid="delivery.input"
-              />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button
-                size="sm"
-                className="bg-primary text-white"
-                onClick={handleCreateDelivery}
-                disabled={creatingDelivery}
-                data-ocid="delivery.submit_button"
-              >
-                {creatingDelivery ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                ) : null}
-                Save Delivery
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowCreateForm(false)}
-                data-ocid="delivery.cancel_button"
-              >
-                Cancel
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Bulk Assignment */}
-      {selectedIds.size > 0 && (
-        <Card className="border border-primary/30 bg-primary/5 shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-primary">
-              {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
-            </span>
+      {/* Bulk Action Bar */}
+      {selectedOrders.size > 0 && (
+        <div
+          className="sticky top-2 z-10 flex flex-wrap items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl shadow-sm"
+          data-ocid="delivery.panel"
+        >
+          <span className="text-sm font-semibold text-primary">
+            {selectedOrders.size} order{selectedOrders.size > 1 ? "s" : ""}{" "}
+            selected
+          </span>
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
             <Select value={bulkRiderId} onValueChange={setBulkRiderId}>
               <SelectTrigger
-                className="w-44 h-8 text-sm"
+                className="w-40 h-8 text-sm"
                 data-ocid="delivery.select"
               >
                 <SelectValue placeholder="Select rider" />
@@ -3866,95 +3952,58 @@ function DeliveryTab() {
             </Select>
             <Button
               size="sm"
-              className="bg-primary text-white h-8"
+              className="bg-primary text-white"
               onClick={handleBulkAssign}
-              disabled={!bulkRiderId}
+              disabled={!bulkRiderId || bulkAssigning}
               data-ocid="delivery.primary_button"
             >
-              <UserCheck className="w-4 h-4 mr-1.5" />
-              Assign
+              {bulkAssigning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+              ) : null}
+              Assign Rider
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 text-muted-foreground"
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => setSelectedOrders(new Set())}
               data-ocid="delivery.cancel_button"
             >
               Clear
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      {/* Deliveries Table */}
+      {/* Orders Table */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" />
-            Deliveries
+            Orders
             <span className="ml-auto text-xs font-normal text-muted-foreground">
-              {filteredDeliveries.length} records
+              {filteredOrders.length} records
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {filteredDeliveries.length === 0 ? (
+          {filteredOrders.length === 0 ? (
             <div
               className="text-center py-12 text-muted-foreground"
               data-ocid="delivery.empty_state"
             >
               <Truck className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No deliveries for this filter</p>
+              <p className="text-sm">No orders found</p>
+            </div>
+          ) : groupByLocation ? (
+            <div className="divide-y">
+              {groupedOrders().map(({ area, orders: areaOrders }) => (
+                <GroupSection key={area} title={area} count={areaOrders.length}>
+                  <OrdersTable orderList={areaOrders} />
+                </GroupSection>
+              ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table data-ocid="delivery.table">
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="w-10">
-                      <Checkbox
-                        checked={
-                          filteredDeliveries.length > 0 &&
-                          selectedIds.size === filteredDeliveries.length
-                        }
-                        onCheckedChange={toggleSelectAll}
-                        data-ocid="delivery.checkbox"
-                      />
-                    </TableHead>
-                    <TableHead className="text-xs">Order ID</TableHead>
-                    <TableHead className="text-xs">Customer</TableHead>
-                    <TableHead className="text-xs hidden md:table-cell">
-                      Address
-                    </TableHead>
-                    <TableHead className="text-xs hidden md:table-cell">
-                      Delivery Time
-                    </TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Rider</TableHead>
-                    <TableHead className="text-xs hidden lg:table-cell">
-                      Notes
-                    </TableHead>
-                    <TableHead className="text-xs">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredDeliveries.map((d, idx) => (
-                    <DeliveryRow
-                      key={String(d.id)}
-                      delivery={d}
-                      riders={riders}
-                      selected={selectedIds.has(d.id)}
-                      onToggle={() => toggleSelect(d.id)}
-                      onStatusChange={(s) => handleStatusChange(d.id, s)}
-                      onAssignRider={(rid) => handleAssignRider(d.id, rid)}
-                      onNoteBlur={(note) => handleNoteBlur(d.id, note)}
-                      index={idx + 1}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <OrdersTable orderList={filteredOrders} />
           )}
         </CardContent>
       </Card>
@@ -4033,6 +4082,7 @@ function DeliveryTab() {
                   <TableHead className="text-xs">Name</TableHead>
                   <TableHead className="text-xs">Mobile</TableHead>
                   <TableHead className="text-xs">Area</TableHead>
+                  <TableHead className="text-xs">Workload</TableHead>
                   <TableHead className="text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -4083,6 +4133,7 @@ function DeliveryTab() {
                             data-ocid="rider.input"
                           />
                         </TableCell>
+                        <TableCell />
                         <TableCell>
                           <div className="flex gap-1">
                             <Button
@@ -4115,6 +4166,22 @@ function DeliveryTab() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {r.area}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const wl = riderWorkload.get(String(r.id)) ?? 0;
+                            return (
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  wl > 0
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-gray-100 text-gray-500"
+                                }`}
+                              >
+                                {wl > 0 ? `${wl} active` : "idle"}
+                              </span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
@@ -4151,133 +4218,55 @@ function DeliveryTab() {
   );
 }
 
-function DeliveryRow({
-  delivery,
-  riders,
-  selected,
-  onToggle,
-  onStatusChange,
-  onAssignRider,
-  onNoteBlur,
-  index,
+function GroupSection({
+  title,
+  count,
+  children,
 }: {
-  delivery: DeliveryRecord;
-  riders: Rider[];
-  selected: boolean;
-  onToggle: () => void;
-  onStatusChange: (s: DeliveryStatus) => void;
-  onAssignRider: (riderId: string) => void;
-  onNoteBlur: (note: string) => void;
-  index: number;
+  title: string;
+  count: number;
+  children: React.ReactNode;
 }) {
-  const [note, setNote] = useState(delivery.notes);
-  const dt = new Date(Number(delivery.deliveryTime) / 1_000_000);
-  const formattedDate = dt.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const statusLabels: Record<DeliveryStatus, string> = {
-    [DeliveryStatus.preparing]: "Preparing",
-    [DeliveryStatus.ready]: "Ready",
-    [DeliveryStatus.outForDelivery]: "Out for Delivery",
-    [DeliveryStatus.delivered]: "Delivered",
-  };
-  const statusBadge = (status: DeliveryStatus) => {
-    const map = {
-      [DeliveryStatus.preparing]: "bg-amber-100 text-amber-700",
-      [DeliveryStatus.ready]: "bg-blue-100 text-blue-700",
-      [DeliveryStatus.outForDelivery]: "bg-purple-100 text-purple-700",
-      [DeliveryStatus.delivered]: "bg-green-100 text-green-700",
-    };
-    return (
-      <span
-        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status]}`}
-      >
-        {statusLabels[status]}
-      </span>
-    );
-  };
-
+  const [open, setOpen] = useState(true);
   return (
-    <TableRow
-      data-ocid={`delivery.item.${index}`}
-      className={selected ? "bg-primary/5" : ""}
-    >
-      <TableCell>
-        <Checkbox
-          checked={selected}
-          onCheckedChange={onToggle}
-          data-ocid={`delivery.checkbox.${index}`}
-        />
-      </TableCell>
-      <TableCell className="text-xs font-mono text-muted-foreground">
-        #{String(delivery.orderId)}
-      </TableCell>
-      <TableCell className="text-sm font-medium">
-        {delivery.customerName}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground hidden md:table-cell max-w-32 truncate">
-        {delivery.address}
-      </TableCell>
-      <TableCell className="text-xs hidden md:table-cell">
-        {formattedDate}
-      </TableCell>
-      <TableCell>{statusBadge(delivery.status)}</TableCell>
-      <TableCell>
-        <Select
-          value={delivery.riderId ? String(delivery.riderId) : ""}
-          onValueChange={onAssignRider}
-        >
-          <SelectTrigger
-            className="w-28 h-7 text-xs"
-            data-ocid={"delivery.select"}
-          >
-            <SelectValue placeholder="Assign" />
-          </SelectTrigger>
-          <SelectContent>
-            {riders.map((r) => (
-              <SelectItem key={String(r.id)} value={String(r.id)}>
-                {r.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell className="hidden lg:table-cell">
-        <Textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => onNoteBlur(note)}
-          placeholder="Notes..."
-          className="text-xs h-8 min-h-0 resize-none py-1"
-          data-ocid={"delivery.textarea"}
-        />
-      </TableCell>
-      <TableCell>
-        <Select
-          value={delivery.status}
-          onValueChange={(v) => onStatusChange(v as DeliveryStatus)}
-        >
-          <SelectTrigger
-            className="w-36 h-7 text-xs"
-            data-ocid={"delivery.select"}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DeliveryStatus.preparing}>Preparing</SelectItem>
-            <SelectItem value={DeliveryStatus.ready}>Ready</SelectItem>
-            <SelectItem value={DeliveryStatus.outForDelivery}>
-              Out for Delivery
-            </SelectItem>
-            <SelectItem value={DeliveryStatus.delivered}>Delivered</SelectItem>
-          </SelectContent>
-        </Select>
-      </TableCell>
-    </TableRow>
+    <div>
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+        onClick={() => setOpen((v) => !v)}
+        data-ocid="delivery.toggle"
+      >
+        <MapPin className="w-3.5 h-3.5 text-primary" />
+        <span className="font-semibold text-sm">{title}</span>
+        <span className="ml-2 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+          {count} order{count !== 1 ? "s" : ""}
+        </span>
+        <span className="ml-auto text-muted-foreground text-xs">
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+function DeliveryNoteCell({
+  defaultValue,
+  onBlur,
+}: {
+  defaultValue: string;
+  onBlur: (notes: string) => void;
+}) {
+  const [note, setNote] = useState(defaultValue);
+  return (
+    <Textarea
+      value={note}
+      onChange={(e) => setNote(e.target.value)}
+      onBlur={() => onBlur(note)}
+      placeholder="Notes..."
+      className="text-xs h-8 min-h-0 resize-none py-1"
+      data-ocid="delivery.textarea"
+    />
   );
 }
 
