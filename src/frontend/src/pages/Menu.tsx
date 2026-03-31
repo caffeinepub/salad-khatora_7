@@ -215,7 +215,9 @@ export default function Menu() {
               >
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div key={i} className="rounded-2xl overflow-hidden">
-                    <Skeleton className="w-full h-36 md:h-48" />
+                    <div className="aspect-[4/3] w-full">
+                      <Skeleton className="w-full h-full" />
+                    </div>
                     <div className="p-4 space-y-2">
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="h-3 w-full" />
@@ -266,20 +268,25 @@ export default function Menu() {
                       transition={{ duration: 0.4, delay: i * 0.05 }}
                       data-ocid={`menu.item.${i + 1}`}
                     >
-                      <div className="bg-accent/50 flex items-center justify-center h-36 md:h-48 relative">
+                      <div className="aspect-[4/3] w-full relative overflow-hidden">
                         {(item as any).imageUrl ? (
                           <img
                             src={(item as any).imageUrl}
                             alt={item.name}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
+                            decoding="async"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display =
                                 "none";
                             }}
                           />
                         ) : (
-                          <span className="text-4xl select-none">🥗</span>
+                          <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
+                            <span className="text-5xl select-none opacity-60">
+                              🥗
+                            </span>
+                          </div>
                         )}
                         {(item.tags ?? []).length > 0 && (
                           <div className="absolute top-2 left-2 flex flex-wrap gap-1">
@@ -307,7 +314,7 @@ export default function Menu() {
                           </div>
                         )}
                       </div>
-                      <div className="p-4">
+                      <div className="p-4 md:p-5">
                         <h3 className="font-bold text-foreground text-sm md:text-base mb-1">
                           {item.name}
                         </h3>

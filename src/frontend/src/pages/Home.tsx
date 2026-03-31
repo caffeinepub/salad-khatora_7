@@ -273,29 +273,34 @@ export default function Home() {
               {featuredItems.map((item, i) => (
                 <motion.div
                   key={item.id.toString()}
-                  className="bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
+                  className="bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-shadow group"
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: i * 0.1 }}
                   data-ocid={`home.featured.item.${i + 1}`}
                 >
-                  <div className="h-40 bg-accent/50 relative flex items-center justify-center">
+                  <div className="aspect-[4/3] w-full relative overflow-hidden">
                     {(item as any).imageUrl ? (
                       <img
                         src={(item as any).imageUrl}
                         alt={item.name}
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
                     ) : (
-                      <span className="text-4xl select-none">🥗</span>
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
+                        <span className="text-5xl select-none opacity-60">
+                          🥗
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <div className="p-4">
+                  <div className="p-4 md:p-5">
                     <h3 className="font-bold text-foreground text-base mb-1">
                       {item.name}
                     </h3>
