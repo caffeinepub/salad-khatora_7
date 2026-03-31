@@ -110,6 +110,16 @@ export default function Cart() {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Subscription meal status for display
+  const mealsRemaining = userSubscription
+    ? Number(userSubscription.saladsRemaining)
+    : null;
+  const isActiveSubscription =
+    userSubscription?.status === Variant_active_expired.active &&
+    mealsRemaining !== null &&
+    mealsRemaining > 0;
+  const isLowMeals = isActiveSubscription && mealsRemaining! <= 3;
+
   return (
     <div className="min-h-screen flex flex-col font-poppins">
       <Navbar />
@@ -392,9 +402,62 @@ export default function Cart() {
                   </div>
                 </div>
 
+                {/* ── Subscription Meals Status ── */}
+                <div className="mt-5 mb-3" data-ocid="cart.subscription_status">
+                  {!userSubscription ? (
+                    // No active subscription
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 text-base">🍽️</span>
+                        <span className="text-sm text-gray-600 font-medium">
+                          No active subscription
+                        </span>
+                      </div>
+                      <Link to="/subscription">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-3 text-xs rounded-full border-primary text-primary hover:bg-accent shrink-0"
+                          data-ocid="cart.subscription_status.view_plans_button"
+                        >
+                          View Plans
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : subscriptionEnded ? // Subscription expired / 0 meals — already shown below as error, skip here
+                  null : isLowMeals ? (
+                    // Low meals warning
+                    <div className="flex items-center gap-2 rounded-xl bg-orange-50 border border-orange-200 px-4 py-3">
+                      <span className="text-orange-500 text-base shrink-0">
+                        ⚠️
+                      </span>
+                      <span className="text-sm text-orange-700 font-medium">
+                        Only {mealsRemaining} meal
+                        {mealsRemaining === 1 ? "" : "s"} left – renew soon
+                      </span>
+                      <Link to="/subscription" className="ml-auto shrink-0">
+                        <span className="text-xs text-orange-600 underline underline-offset-2 font-medium hover:text-orange-800">
+                          Renew
+                        </span>
+                      </Link>
+                    </div>
+                  ) : (
+                    // Normal — meals available
+                    <div className="flex items-center gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+                      <span className="text-green-600 text-base shrink-0">
+                        🥗
+                      </span>
+                      <span className="text-sm text-green-700 font-medium">
+                        You have {mealsRemaining} meal
+                        {mealsRemaining === 1 ? "" : "s"} remaining
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {subscriptionEnded && (
                   <div
-                    className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium mt-5 mb-3"
+                    className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium mb-3"
                     data-ocid="cart.error_state"
                   >
                     <span>
@@ -411,7 +474,7 @@ export default function Cart() {
                 )}
 
                 <Button
-                  className="w-full mt-5 rounded-full bg-primary text-white hover:bg-primary/90 h-12 text-base font-semibold disabled:opacity-50"
+                  className="w-full mt-2 rounded-full bg-primary text-white hover:bg-primary/90 h-12 text-base font-semibold disabled:opacity-50"
                   disabled={!canOrder || placeOrder.isPending}
                   onClick={handleOrder}
                   data-ocid="cart.submit_button"
