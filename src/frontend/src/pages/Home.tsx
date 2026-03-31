@@ -8,6 +8,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle, ShoppingCart } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
+
+const PLACEHOLDER = "/assets/generated/menu-placeholder.dim_400x300.jpg";
+
+function getImageSrc(imageUrl: unknown): string {
+  if (typeof imageUrl === "string" && imageUrl.trim() !== "") return imageUrl;
+  return PLACEHOLDER;
+}
 
 const steps = [
   {
@@ -56,6 +64,8 @@ const benefits = [
 
 export default function Home() {
   const { actor, isFetching } = useActor();
+  const [heroError, setHeroError] = useState(false);
+
   const { data: featuredItems = [] } = useQuery({
     queryKey: ["featuredMenuItems"],
     queryFn: async () => {
@@ -123,18 +133,25 @@ export default function Home() {
 
           {/* Hero Image */}
           <motion.div
-            className="flex-1 flex justify-center"
+            className="flex-1 flex justify-center items-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7, delay: 0.2 }}
           >
             <div className="relative">
               <div className="w-72 h-72 md:w-96 md:h-96 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
-                <img
-                  src="/assets/generated/hero-salad-bowl.dim_800x600.jpg"
-                  alt="Fresh salad bowl"
-                  className="w-full h-full object-cover"
-                />
+                {!heroError ? (
+                  <img
+                    src="/assets/generated/hero-salad-bowl.dim_600x600.png"
+                    alt="Fresh salad bowl"
+                    className="w-full h-full object-cover object-center"
+                    onError={() => setHeroError(true)}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-green-100 to-emerald-200 flex items-center justify-center">
+                    <span className="text-8xl">🥗</span>
+                  </div>
+                )}
               </div>
               {/* Floating stats */}
               <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl px-4 py-3 shadow-card">
@@ -280,25 +297,20 @@ export default function Home() {
                   transition={{ duration: 0.4, delay: i * 0.1 }}
                   data-ocid={`home.featured.item.${i + 1}`}
                 >
-                  <div className="aspect-[4/3] w-full relative overflow-hidden">
-                    {(item as any).imageUrl ? (
-                      <img
-                        src={(item as any).imageUrl}
-                        alt={item.name}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
-                        <span className="text-5xl select-none opacity-60">
-                          🥗
-                        </span>
-                      </div>
-                    )}
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-t-2xl bg-gray-100">
+                    <img
+                      src={getImageSrc((item as any).imageUrl)}
+                      alt={item.name}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (img.src !== window.location.origin + PLACEHOLDER) {
+                          img.src = PLACEHOLDER;
+                        }
+                      }}
+                    />
                   </div>
                   <div className="p-4 md:p-5">
                     <h3 className="font-bold text-foreground text-base mb-1">

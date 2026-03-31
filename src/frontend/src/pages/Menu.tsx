@@ -21,6 +21,13 @@ import type { Ingredient, MenuItem } from "../backend";
 type FilterGoal = "all" | "weight-loss" | "high-protein" | "detox";
 type SortOption = "default" | "calories-asc" | "protein-desc" | "price-asc";
 
+const PLACEHOLDER = "/assets/generated/menu-placeholder.dim_400x300.jpg";
+
+function getImageSrc(imageUrl: unknown): string {
+  if (typeof imageUrl === "string" && imageUrl.trim() !== "") return imageUrl;
+  return PLACEHOLDER;
+}
+
 const FILTER_OPTIONS: {
   value: FilterGoal;
   label: string;
@@ -268,26 +275,23 @@ export default function Menu() {
                       transition={{ duration: 0.4, delay: i * 0.05 }}
                       data-ocid={`menu.item.${i + 1}`}
                     >
-                      <div className="aspect-[4/3] w-full relative overflow-hidden">
-                        {(item as any).imageUrl ? (
-                          <img
-                            src={(item as any).imageUrl}
-                            alt={item.name}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            loading="lazy"
-                            decoding="async"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
-                            <span className="text-5xl select-none opacity-60">
-                              🥗
-                            </span>
-                          </div>
-                        )}
+                      <div className="aspect-[4/3] w-full relative overflow-hidden rounded-t-2xl bg-gray-100">
+                        <img
+                          src={getImageSrc((item as any).imageUrl)}
+                          alt={item.name}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            if (
+                              img.src !==
+                              window.location.origin + PLACEHOLDER
+                            ) {
+                              img.src = PLACEHOLDER;
+                            }
+                          }}
+                        />
                         {(item.tags ?? []).length > 0 && (
                           <div className="absolute top-2 left-2 flex flex-wrap gap-1">
                             {(item.tags ?? []).map((tag) => (
