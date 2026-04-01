@@ -80,7 +80,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
 import {
@@ -3439,8 +3439,13 @@ function DeliveryTab() {
     area: "",
   });
 
+  const hasLoadedRef = useRef(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasLoadedRef is a stable ref, intentionally excluded
   useEffect(() => {
-    if (!actor) return;
+    // Fetch ONLY ONCE on mount — no auto-refresh, no background syncing
+    if (!actor || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     setLoading(true);
     Promise.all([
       actor.getAllOrders() as unknown as Promise<ExtendedOrder[]>,
@@ -3576,7 +3581,7 @@ function DeliveryTab() {
     }
   };
 
-  const handleDeliveryNoteBlur = async (orderId: bigint, notes: string) => {
+  const handleSaveDeliveryNote = async (orderId: bigint, notes: string) => {
     if (!actor) return;
     try {
       await (actor as any).updateOrderDeliveryNotes(orderId, notes);
@@ -3801,7 +3806,7 @@ function DeliveryTab() {
                   <DeliveryNoteCell
                     key={String(order.id)}
                     defaultValue={order.deliveryNotes ?? ""}
-                    onBlur={(notes) => handleDeliveryNoteBlur(order.id, notes)}
+                    onSave={(notes) => handleSaveDeliveryNote(order.id, notes)}
                   />
                 </TableCell>
               </TableRow>
@@ -4252,21 +4257,31 @@ function GroupSection({
 
 function DeliveryNoteCell({
   defaultValue,
-  onBlur,
+  onSave,
 }: {
   defaultValue: string;
-  onBlur: (notes: string) => void;
+  onSave: (notes: string) => void;
 }) {
   const [note, setNote] = useState(defaultValue);
   return (
-    <Textarea
-      value={note}
-      onChange={(e) => setNote(e.target.value)}
-      onBlur={() => onBlur(note)}
-      placeholder="Notes..."
-      className="text-xs h-8 min-h-0 resize-none py-1"
-      data-ocid="delivery.textarea"
-    />
+    <div className="flex gap-1 items-start">
+      <Textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Notes..."
+        className="text-xs h-8 min-h-0 resize-none py-1"
+        data-ocid="delivery.textarea"
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8 px-2 text-xs shrink-0"
+        onClick={() => onSave(note)}
+        data-ocid="delivery.save_note_button"
+      >
+        Save
+      </Button>
+    </div>
   );
 }
 
