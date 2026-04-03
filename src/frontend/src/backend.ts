@@ -131,6 +131,13 @@ export type Result_1 = {
     __kind__: "err";
     err: string;
 };
+export type Result_Order = {
+    __kind__: "ok";
+    ok: Order;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface Order {
     id: bigint;
     status: OrderStatus;
@@ -1124,6 +1131,65 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async updateOrderDeliveryStatus(arg0: bigint, arg1: DeliveryStatus): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).updateOrderDeliveryStatus(arg0, to_candid_DeliveryStatus_n49(this._uploadFile, this._downloadFile, arg1));
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).updateOrderDeliveryStatus(arg0, to_candid_DeliveryStatus_n49(this._uploadFile, this._downloadFile, arg1));
+            return result;
+        }
+    }
+    async assignOrderRider(arg0: bigint, arg1: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).assignOrderRider(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).assignOrderRider(arg0, arg1);
+            return result;
+        }
+    }
+    async updateOrderDeliveryNotes(arg0: bigint, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).updateOrderDeliveryNotes(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).updateOrderDeliveryNotes(arg0, arg1);
+            return result;
+        }
+    }
+    async updateOrder(arg0: bigint, arg1: DeliveryStatus | null, arg2: bigint | null, arg3: string | null): Promise<Result_Order> {
+        const candid_arg1: [] | [any] = arg1 !== null ? [to_candid_DeliveryStatus_n49(this._uploadFile, this._downloadFile, arg1)] : [];
+        const candid_arg2: [] | [bigint] = arg2 !== null ? [arg2] : [];
+        const candid_arg3: [] | [string] = arg3 !== null ? [arg3] : [];
+        if (this.processError) {
+            try {
+                const result = await (this.actor as any).updateOrder(arg0, candid_arg1, candid_arg2, candid_arg3);
+                return from_candid_Result_Order(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await (this.actor as any).updateOrder(arg0, candid_arg1, candid_arg2, candid_arg3);
+            return from_candid_Result_Order(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async updateReviewStatus(arg0: string, arg1: ReviewStatus): Promise<Result> {
         if (this.processError) {
             try {
@@ -1239,6 +1305,13 @@ function from_candid_Result_1_n13(_uploadFile: (file: ExternalBlob) => Promise<U
 function from_candid_Result_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result): Result {
     return from_candid_variant_n6(_uploadFile, _downloadFile, value);
 }
+function from_candid_Result_Order(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: any): Result_Order {
+    if ('ok' in value) {
+        return { __kind__: 'ok', ok: from_candid_record_n28(_uploadFile, _downloadFile, value.ok) };
+    } else {
+        return { __kind__: 'err', err: value.err };
+    }
+}
 function from_candid_ReviewStatus_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ReviewStatus): ReviewStatus {
     return from_candid_variant_n10(_uploadFile, _downloadFile, value);
 }
@@ -1314,36 +1387,14 @@ function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uin
         notes: value.notes
     };
 }
-function from_candid_record_n28(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: bigint;
-    status: _OrderStatus;
-    createdAt: _Time;
-    user: Principal;
-    deliveryType: {
-        scheduled: _Time;
-    } | {
-        instant: null;
-    };
-    totalAmount: bigint;
-    items: Array<_OrderItem>;
-}): {
-    id: bigint;
-    status: OrderStatus;
-    createdAt: Time;
-    user: Principal;
-    deliveryType: {
-        __kind__: "scheduled";
-        scheduled: Time;
-    } | {
-        __kind__: "instant";
-        instant: null;
-    };
-    totalAmount: bigint;
-    items: Array<OrderItem>;
-} {
+function from_candid_record_n28(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: any): Order {
     return {
         id: value.id,
         status: from_candid_OrderStatus_n29(_uploadFile, _downloadFile, value.status),
+        deliveryStatus: value.deliveryStatus ? from_candid_DeliveryStatus_n23(_uploadFile, _downloadFile, value.deliveryStatus) : DeliveryStatus.preparing,
+        assignedRiderId: value.assignedRiderId && value.assignedRiderId.length > 0 ? value.assignedRiderId[0] : undefined,
+        deliveryTime: value.deliveryTime && value.deliveryTime.length > 0 ? value.deliveryTime[0] : undefined,
+        deliveryNotes: value.deliveryNotes ?? "",
         createdAt: value.createdAt,
         user: value.user,
         deliveryType: from_candid_variant_n31(_uploadFile, _downloadFile, value.deliveryType),

@@ -104,12 +104,17 @@ export const OrderItem = IDL.Record({
 export const Order = IDL.Record({
   'id' : IDL.Nat,
   'status' : OrderStatus,
+  'deliveryStatus' : IDL.Variant({ 'preparing' : IDL.Null, 'outForDelivery' : IDL.Null, 'delivered' : IDL.Null, 'ready' : IDL.Null }),
+  'assignedRiderId' : IDL.Opt(IDL.Nat),
+  'deliveryTime' : IDL.Opt(Time),
+  'deliveryNotes' : IDL.Text,
   'createdAt' : Time,
   'user' : IDL.Principal,
   'deliveryType' : IDL.Variant({ 'scheduled' : Time, 'instant' : IDL.Null }),
   'totalAmount' : IDL.Nat,
   'items' : IDL.Vec(OrderItem),
 });
+export const Result_Order = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
 export const Rider = IDL.Record({
   'id' : IDL.Nat,
   'area' : IDL.Text,
@@ -284,6 +289,10 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
+  'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
+  'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+  'updateOrderDeliveryNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+  'updateOrder' : IDL.Func([IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)], [Result_Order], []),
   'updateReviewStatus' : IDL.Func([IDL.Text, ReviewStatus], [Result], []),
   'updateRider' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text, IDL.Text], [], []),
   'updateSubscriptionStatus' : IDL.Func(
@@ -394,12 +403,17 @@ export const idlFactory = ({ IDL }) => {
   const Order = IDL.Record({
     'id' : IDL.Nat,
     'status' : OrderStatus,
+    'deliveryStatus' : IDL.Variant({ 'preparing' : IDL.Null, 'outForDelivery' : IDL.Null, 'delivered' : IDL.Null, 'ready' : IDL.Null }),
+    'assignedRiderId' : IDL.Opt(IDL.Nat),
+    'deliveryTime' : IDL.Opt(Time),
+    'deliveryNotes' : IDL.Text,
     'createdAt' : Time,
     'user' : IDL.Principal,
     'deliveryType' : IDL.Variant({ 'scheduled' : Time, 'instant' : IDL.Null }),
     'totalAmount' : IDL.Nat,
     'items' : IDL.Vec(OrderItem),
   });
+  const Result_Order = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
   const Rider = IDL.Record({
     'id' : IDL.Nat,
     'area' : IDL.Text,
@@ -574,6 +588,10 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
+  'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
+  'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+  'updateOrderDeliveryNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+  'updateOrder' : IDL.Func([IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)], [Result_Order], []),
     'updateReviewStatus' : IDL.Func([IDL.Text, ReviewStatus], [Result], []),
     'updateRider' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text, IDL.Text], [], []),
     'updateSubscriptionStatus' : IDL.Func(

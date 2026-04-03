@@ -105,6 +105,8 @@ export type Result = { 'ok' : Review } |
   { 'err' : string };
 export type Result_1 = { 'ok' : null } |
   { 'err' : string };
+export type Result_Order = { 'ok' : Order } |
+  { 'err' : string };
 export interface Review {
   'id' : string,
   'status' : ReviewStatus,
@@ -220,6 +222,10 @@ export interface _SERVICE {
     undefined
   >,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
+  'updateOrderDeliveryStatus' : ActorMethod<[bigint, DeliveryStatus], undefined>,
+  'assignOrderRider' : ActorMethod<[bigint, bigint], undefined>,
+  'updateOrderDeliveryNotes' : ActorMethod<[bigint, string], undefined>,
+  'updateOrder' : ActorMethod<[bigint, [] | [DeliveryStatus], [] | [bigint], [] | [string]], Result_Order>,
   'updateReviewStatus' : ActorMethod<[string, ReviewStatus], Result>,
   'updateRider' : ActorMethod<[bigint, string, string, string], undefined>,
   'updateSubscriptionStatus' : ActorMethod<

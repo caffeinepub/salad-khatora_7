@@ -14,17 +14,7 @@ declare global {
   }
 }
 
-// Disable automatic re-fetching to prevent connection loops and API flooding
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      staleTime: Number.POSITIVE_INFINITY,
-      retry: 1,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>

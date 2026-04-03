@@ -49,6 +49,13 @@ export type Result_1 = {
     __kind__: "err";
     err: string;
 };
+export type Result_Order = {
+    __kind__: "ok";
+    ok: Order;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface Order {
     id: bigint;
     status: OrderStatus;
@@ -267,6 +274,7 @@ export interface backendInterface {
     updateOrderDeliveryStatus(orderId: bigint, deliveryStatus: DeliveryStatus): Promise<void>;
     updateOrderRider(orderId: bigint, riderId: bigint): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
+    updateOrder(orderId: bigint, deliveryStatus: DeliveryStatus | null, assignedRiderId: bigint | null, deliveryNotes: string | null): Promise<Result_Order>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;
     updateRider(id: bigint, name: string, mobile: string, area: string): Promise<void>;
     updateSubscriptionPlan(id: bigint, name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<void>;

@@ -98,12 +98,23 @@ import {
   type Subscription,
   Variant_active_expired,
 } from "../backend";
+import type { Result_Order } from "../backend.d";
 
 // Extended Order type with delivery fields from the new backend API
 type ExtendedOrder = Order & {
   deliveryStatus?: DeliveryStatus;
   assignedRiderId?: bigint;
   deliveryNotes?: string;
+};
+
+// Type extension: actor includes updateOrder not in the generated interface
+type ActorWithUpdateOrder = {
+  updateOrder(
+    orderId: bigint,
+    deliveryStatus: DeliveryStatus | null,
+    assignedRiderId: bigint | null,
+    deliveryNotes: string | null,
+  ): Promise<Result_Order>;
 };
 
 function formatDate(ts: bigint) {
@@ -3442,6 +3453,13 @@ function DeliveryTab() {
   const [bulkRiderId, setBulkRiderId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [groupByLocation, setGroupByLocation] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<
+    Map<string, DeliveryStatus>
+  >(new Map());
+  const [pendingRider, setPendingRider] = useState<Map<string, string>>(
+    new Map(),
+  );
+  const [savingOrder, setSavingOrder] = useState<Set<string>>(new Set());
 
   // Add rider form
   const [newRider, setNewRider] = useState({ name: "", mobile: "", area: "" });
@@ -3549,34 +3567,59 @@ function DeliveryTab() {
     }));
   };
 
-  const handleDeliveryStatusChange = async (
+  const handleSelectStatus = (
     orderId: bigint,
     deliveryStatus: DeliveryStatus,
   ) => {
-    if (!actor) return;
-    try {
-      await (actor as any).updateOrderDeliveryStatus(orderId, deliveryStatus);
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, deliveryStatus } : o)),
-      );
-      toast.success("Status updated");
-    } catch (_e) {
-      toast.error("Failed to update status");
-    }
+    setPendingStatus((prev) =>
+      new Map(prev).set(String(orderId), deliveryStatus),
+    );
   };
 
-  const handleAssignOrderRider = async (orderId: bigint, riderId: string) => {
-    if (!actor || !riderId) return;
+  const handleSelectRider = (orderId: bigint, riderId: string) => {
+    setPendingRider((prev) => new Map(prev).set(String(orderId), riderId));
+  };
+
+  const handleSaveOrderUpdate = async (orderId: bigint) => {
+    if (!actor) return;
+    const idStr = String(orderId);
+    const newStatus = pendingStatus.get(idStr) ?? null;
+    const newRider = pendingRider.get(idStr);
+    const newRiderId = newRider ? BigInt(newRider) : null;
+
+    setSavingOrder((prev) => new Set(prev).add(idStr));
     try {
-      await (actor as any).assignOrderRider(orderId, BigInt(riderId));
+      const result = await (
+        actor as unknown as ActorWithUpdateOrder
+      ).updateOrder(orderId, newStatus, newRiderId, null);
+      if (result.__kind__ === "err") {
+        toast.error(`Update failed: ${result.err}`);
+        return;
+      }
+      const updatedOrder = result.ok;
       setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId ? { ...o, assignedRiderId: BigInt(riderId) } : o,
-        ),
+        prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder } : o)),
       );
-      toast.success("Rider assigned");
-    } catch (_e) {
-      toast.error("Failed to assign rider");
+      setPendingStatus((prev) => {
+        const m = new Map(prev);
+        m.delete(idStr);
+        return m;
+      });
+      setPendingRider((prev) => {
+        const m = new Map(prev);
+        m.delete(idStr);
+        return m;
+      });
+      toast.success("Order updated successfully");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Update failed: ${msg}`);
+    } finally {
+      setSavingOrder((prev) => {
+        const s = new Set(prev);
+        s.delete(idStr);
+        return s;
+      });
     }
   };
 
@@ -3584,25 +3627,47 @@ function DeliveryTab() {
     if (!bulkRiderId || selectedOrders.size === 0) return;
     setBulkAssigning(true);
     const ids = Array.from(selectedOrders);
-    try {
-      await Promise.all(
-        ids.map((id) => handleAssignOrderRider(id, bulkRiderId)),
-      );
-      setSelectedOrders(new Set());
-      setBulkRiderId("");
-    } catch (_e) {
-      toast.error("Bulk assign failed");
-    } finally {
-      setBulkAssigning(false);
+    let successCount = 0;
+    let errorMsg = "";
+    for (const id of ids) {
+      try {
+        const result = await (
+          actor as unknown as ActorWithUpdateOrder
+        ).updateOrder(id, null, BigInt(bulkRiderId), null);
+        if (result.__kind__ === "err") {
+          errorMsg = result.err;
+        } else {
+          const updatedOrder = result.ok;
+          setOrders((prev) =>
+            prev.map((o) => (o.id === id ? { ...o, ...updatedOrder } : o)),
+          );
+          successCount++;
+        }
+      } catch (e) {
+        errorMsg = e instanceof Error ? e.message : String(e);
+      }
     }
+    if (successCount > 0) toast.success(`${successCount} order(s) assigned`);
+    if (errorMsg) toast.error(`Some assignments failed: ${errorMsg}`);
+    setSelectedOrders(new Set());
+    setBulkRiderId("");
+    setBulkAssigning(false);
   };
 
   const handleSaveDeliveryNote = async (orderId: bigint, notes: string) => {
     if (!actor) return;
     try {
-      await (actor as any).updateOrderDeliveryNotes(orderId, notes);
-    } catch (_e) {
-      toast.error("Failed to save note");
+      const result = await (
+        actor as unknown as ActorWithUpdateOrder
+      ).updateOrder(orderId, null, null, notes);
+      if (result.__kind__ === "err") {
+        toast.error(`Save failed: ${result.err}`);
+        return;
+      }
+      toast.success("Note saved");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Save failed: ${msg}`);
     }
   };
 
@@ -3691,7 +3756,23 @@ function DeliveryTab() {
     });
   };
 
-  const OrdersTable = ({ orderList }: { orderList: ExtendedOrder[] }) => (
+  const OrdersTable = ({
+    orderList,
+    pendingStatusMap,
+    pendingRiderMap,
+    savingOrderSet,
+    onSelectStatus,
+    onSelectRider,
+    onSaveOrder,
+  }: {
+    orderList: ExtendedOrder[];
+    pendingStatusMap: Map<string, DeliveryStatus>;
+    pendingRiderMap: Map<string, string>;
+    savingOrderSet: Set<string>;
+    onSelectStatus: (orderId: bigint, status: DeliveryStatus) => void;
+    onSelectRider: (orderId: bigint, riderId: string) => void;
+    onSaveOrder: (orderId: bigint) => void;
+  }) => (
     <div className="overflow-x-auto">
       <Table data-ocid="delivery.table">
         <TableHeader>
@@ -3734,8 +3815,15 @@ function DeliveryTab() {
         </TableHeader>
         <TableBody>
           {orderList.map((order, idx) => {
+            const idStr = String(order.id);
+            const pendingStatusValue = pendingStatusMap.get(idStr);
             const currentStatus =
-              order.deliveryStatus ?? DeliveryStatus.preparing;
+              pendingStatusValue ??
+              order.deliveryStatus ??
+              DeliveryStatus.preparing;
+            const isSaving = savingOrderSet.has(idStr);
+            const hasPendingChanges =
+              pendingStatusMap.has(idStr) || pendingRiderMap.has(idStr);
             return (
               <TableRow
                 key={String(order.id)}
@@ -3767,10 +3855,7 @@ function DeliveryTab() {
                     <Select
                       value={currentStatus}
                       onValueChange={(v) =>
-                        handleDeliveryStatusChange(
-                          order.id,
-                          v as DeliveryStatus,
-                        )
+                        onSelectStatus(order.id, v as DeliveryStatus)
                       }
                     >
                       <SelectTrigger
@@ -3794,14 +3879,32 @@ function DeliveryTab() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    {hasPendingChanges && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={isSaving}
+                        onClick={() => onSaveOrder(order.id)}
+                        data-ocid="delivery.save_button"
+                      >
+                        {isSaving ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>
                   <Select
                     value={
-                      order.assignedRiderId ? String(order.assignedRiderId) : ""
+                      pendingRiderMap.get(idStr) ??
+                      (order.assignedRiderId
+                        ? String(order.assignedRiderId)
+                        : "")
                     }
-                    onValueChange={(v) => handleAssignOrderRider(order.id, v)}
+                    onValueChange={(v) => onSelectRider(order.id, v)}
                   >
                     <SelectTrigger
                       className="w-28 h-7 text-xs"
@@ -4019,12 +4122,28 @@ function DeliveryTab() {
             <div className="divide-y">
               {groupedOrders().map(({ area, orders: areaOrders }) => (
                 <GroupSection key={area} title={area} count={areaOrders.length}>
-                  <OrdersTable orderList={areaOrders} />
+                  <OrdersTable
+                    orderList={areaOrders}
+                    pendingStatusMap={pendingStatus}
+                    pendingRiderMap={pendingRider}
+                    savingOrderSet={savingOrder}
+                    onSelectStatus={handleSelectStatus}
+                    onSelectRider={handleSelectRider}
+                    onSaveOrder={handleSaveOrderUpdate}
+                  />
                 </GroupSection>
               ))}
             </div>
           ) : (
-            <OrdersTable orderList={filteredOrders} />
+            <OrdersTable
+              orderList={filteredOrders}
+              pendingStatusMap={pendingStatus}
+              pendingRiderMap={pendingRider}
+              savingOrderSet={savingOrder}
+              onSelectStatus={handleSelectStatus}
+              onSelectRider={handleSelectRider}
+              onSaveOrder={handleSaveOrderUpdate}
+            />
           )}
         </CardContent>
       </Card>

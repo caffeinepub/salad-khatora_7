@@ -1,34 +1,42 @@
-# Salad Khatora – Delivery Management Improvements
+# Salad Khatora
 
 ## Current State
-The `DeliveryTab` in `AdminPanel.tsx` has:
-- Filters: All, Active, Out for Delivery, Delivered
-- Per-order rider assignment via Select dropdown
-- Per-order status change via Select dropdown
-- Per-order delivery notes (inline text input)
-- Rider CRUD management (Add/Edit/Delete with name, mobile, area)
-- Stat cards: Total, Active, Out for Delivery, Delivered
+
+The Orders & Delivery system uses a unified `ordersV2` database where each order contains delivery fields (`deliveryStatus`, `assignedRiderId`, `deliveryNotes`). However:
+
+1. The backend Candid IDL declarations were missing the delivery update functions (`updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`), so the frontend used unsafe `(actor as any)` casts for all delivery mutations.
+2. The `Order` IDL record definition omitted delivery fields, causing the canister response to silently drop `deliveryStatus`, `assignedRiderId`, and `deliveryNotes` during decoding.
+3. The DeliveryTab triggered status and rider updates immediately on `<Select>` change with no Save button, causing unintended API calls.
+4. Error handling used a generic fallback (`"Failed to update status"`) instead of showing the actual backend error.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Filter: Unassigned orders** — orders where `assignedRiderId` is undefined/null
-- **Filter: Assigned orders** — orders where `assignedRiderId` is set
-- **Bulk assign**: checkboxes on each order row + "Select All" checkbox in header; bulk assign button opens a rider picker to assign one rider to all selected orders at once
-- **Group by location/area**: toggle to switch between flat list and grouped-by-area view (groups orders by the rider's area, or "Unassigned" group if no rider)
-- **Rider workload**: in Rider Management section, show count of active deliveries (non-delivered orders) per rider
+- `updateOrder(orderId, deliveryStatus?, assignedRiderId?, deliveryNotes?)` Motoko function returning `Result<Order, Text>` — unified update that checks order exists, admin permission, and returns the updated order
+- `Result_Order` type in all declaration files
+- New `updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`, `updateOrder` typed methods in `backend.ts`
+- Per-row pending state (`pendingStatus`, `pendingRider`, `savingOrder`) in `DeliveryTab`
+- Save button per order row that appears when there are pending unsaved changes
+- `handleSaveOrderUpdate` unified save handler using `actor.updateOrder()`
 
 ### Modify
-- Filter bar: add "Unassigned" and "Assigned" to existing filter options (All, Active, Out for Delivery, Delivered, Unassigned, Assigned)
-- Orders table: add a leading checkbox column for bulk selection
-- Rider list cards: add a badge showing number of active deliveries
+- `Order` IDL record in `backend.did.js` (both exports and `idlFactory`) to include `deliveryStatus`, `assignedRiderId`, `deliveryTime`, `deliveryNotes` fields
+- `from_candid_record_n28` in `backend.ts` to decode the new delivery fields from canister responses
+- `handleDeliveryStatusChange` → `handleSelectStatus` (local pending state only, no API call)
+- `handleAssignOrderRider` → `handleSelectRider` (local pending state only, no API call)
+- `handleBulkAssign` and `handleSaveDeliveryNote` to use typed `actor.updateOrder()` with real error messages
+- `OrdersTable` inner component to accept and use pending state props
 
 ### Remove
-Nothing removed.
+- All `(actor as any)` casts for delivery mutations
+- Immediate API triggers on Select onChange for status and rider
+- Generic error messages suppressing actual backend errors
 
 ## Implementation Plan
-1. Add filter state values `"unassigned"` and `"assigned"` with corresponding filter logic
-2. Add `selectedOrders: Set<bigint>` state, checkbox column in table header and each row, Select All logic
-3. Add `bulkRiderId` state + "Assign Rider" button that appears when selection is non-empty; clicking triggers `handleAssignOrderRider` for each selected order sequentially
-4. Add `groupByLocation: boolean` toggle; when enabled, render orders grouped by rider area (compute per-rider area from riders list)
-5. Compute rider workload map: `riderId -> count` of orders where `assignedRiderId === riderId` and `deliveryStatus !== delivered`; render badge next to rider name in Rider Management section
+
+1. Add `updateOrder` function to `src/backend/main.mo` after existing delivery functions
+2. Add `updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`, `updateOrder` to `backend.did.d.ts` (_SERVICE interface) and add `Result_Order` type
+3. Update `Order` IDL and add `Result_Order` + 4 new functions to `backend.did.js` (both `idlService` and `idlFactory`)
+4. Update `backend.ts`: fix `from_candid_record_n28` to decode delivery fields, add 4 new typed methods, add `Result_Order` type and decoder
+5. Add `Result_Order` and `updateOrder` signature to `backend.d.ts`
+6. Fix `DeliveryTab` in `AdminPanel.tsx`: pending state, Save button per row, typed calls, real error messages

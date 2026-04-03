@@ -954,6 +954,39 @@ actor {
     };
   };
 
+  // ─── Unified updateOrder (status + rider + notes in one call) ────────────────
+  public shared ({ caller }) func updateOrder(
+    orderId : Nat,
+    deliveryStatus : ?DeliveryStatus,
+    assignedRiderId : ?Nat,
+    deliveryNotes : ?Text,
+  ) : async Result<Order, Text> {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      return #err("Unauthorized: Only admins can update orders");
+    };
+    switch (ordersV2.get(orderId)) {
+      case (?order) {
+        let updated : Order = {
+          id = order.id;
+          user = order.user;
+          items = order.items;
+          totalAmount = order.totalAmount;
+          deliveryType = order.deliveryType;
+          status = order.status;
+          deliveryStatus = switch (deliveryStatus) { case (?s) { s }; case (null) { order.deliveryStatus } };
+          assignedRiderId = switch (assignedRiderId) { case (?r) { ?r }; case (null) { order.assignedRiderId } };
+          deliveryTime = order.deliveryTime;
+          deliveryNotes = switch (deliveryNotes) { case (?n) { n }; case (null) { order.deliveryNotes } };
+          createdAt = order.createdAt;
+        };
+        ordersV2.add(orderId, updated);
+        #ok(updated)
+      };
+      case (null) { #err("Order not found: ID " # orderId.toText()) };
+    };
+  };
+
+
   public shared ({ caller }) func updateSubscriptionStatus(user : Principal, status : { #active; #expired }) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update subscription status");
