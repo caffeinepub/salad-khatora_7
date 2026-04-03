@@ -14,15 +14,14 @@ declare global {
   }
 }
 
+// Disable automatic re-fetching to prevent connection loops and API flooding
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Never auto-refetch in the background — all data fetches are explicit
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      refetchOnMount: false,
       staleTime: Number.POSITIVE_INFINITY,
-      retry: false,
+      retry: 1,
     },
   },
 });

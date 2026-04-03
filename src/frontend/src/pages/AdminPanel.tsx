@@ -125,9 +125,11 @@ function AnalyticsTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     Promise.all([actor.getAllOrders(), actor.getAllSubscriptions()])
       .then(([o, s]) => {
         setOrders(o);
@@ -355,9 +357,11 @@ function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<bigint | null>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     actor
       .getAllOrders()
       .then(setOrders)
@@ -1301,9 +1305,11 @@ function UsersTab() {
     | "segment_inactive"
   >("all");
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     Promise.all([
       actor.getAllUsers() as unknown as Promise<UserRecord[]>,
       actor.getAllOrders() as Promise<Order[]>,
@@ -1622,9 +1628,11 @@ function SubscriptionsTab() {
 
   // Delete confirmation
   const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     void (async () => {
       try {
         const [s, u] = await Promise.all([
@@ -2120,8 +2128,10 @@ function InventoryTab() {
     setLowStock(low);
   };
 
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     (async () => {
       try {
         const [all, low] = await Promise.all([
@@ -2442,8 +2452,10 @@ function MenuManagementTab() {
   const [confirmDelete, setConfirmDelete] = useState<bigint | null>(null);
   const [ingredientError, setIngredientError] = useState("");
 
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || isFetching || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     Promise.all([actor.getAllMenuItems(), actor.getAllIngredients()])
       .then(([menuData, invData]) => {
         setItems(menuData);
@@ -3163,9 +3175,13 @@ function OffersTab() {
     }
   };
 
+  const hasLoadedRef = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadCoupons is stable within actor/isFetching scope
   useEffect(() => {
-    if (!isFetching && actor) loadCoupons();
+    if (!isFetching && actor && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadCoupons();
+    }
   }, [actor, isFetching]);
 
   const handleCreate = async (e: React.FormEvent) => {
