@@ -272,7 +272,6 @@ export interface backendInterface {
     updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>, imageUrl: string): Promise<void>;
     updateOrderDeliveryNotes(orderId: bigint, notes: string): Promise<void>;
     updateOrderDeliveryStatus(orderId: bigint, deliveryStatus: DeliveryStatus): Promise<void>;
-    updateOrderRider(orderId: bigint, riderId: bigint): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateOrder(orderId: bigint, deliveryStatus: DeliveryStatus | null, assignedRiderId: bigint | null, deliveryNotes: string | null): Promise<Result_Order>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;

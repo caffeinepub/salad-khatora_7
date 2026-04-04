@@ -98,23 +98,12 @@ import {
   type Subscription,
   Variant_active_expired,
 } from "../backend";
-import type { Result_Order } from "../backend.d";
 
 // Extended Order type with delivery fields from the new backend API
 type ExtendedOrder = Order & {
   deliveryStatus?: DeliveryStatus;
   assignedRiderId?: bigint;
   deliveryNotes?: string;
-};
-
-// Type extension: actor includes updateOrder not in the generated interface
-type ActorWithUpdateOrder = {
-  updateOrder(
-    orderId: bigint,
-    deliveryStatus: DeliveryStatus | null,
-    assignedRiderId: bigint | null,
-    deliveryNotes: string | null,
-  ): Promise<Result_Order>;
 };
 
 function formatDate(ts: bigint) {
@@ -3544,7 +3533,7 @@ function DeliveryTab() {
   for (const r of riders) {
     const count = orders.filter(
       (o) =>
-        o.assignedRiderId === r.id &&
+        String(o.assignedRiderId) === String(r.id) &&
         (o.deliveryStatus ?? DeliveryStatus.preparing) !==
           DeliveryStatus.delivered,
     ).length;
@@ -3555,7 +3544,7 @@ function DeliveryTab() {
     const map = new Map<string, ExtendedOrder[]>();
     for (const o of filteredOrders) {
       const rider = o.assignedRiderId
-        ? riders.find((r) => r.id === o.assignedRiderId)
+        ? riders.find((r) => String(r.id) === String(o.assignedRiderId))
         : undefined;
       const area = rider?.area || "Unassigned";
       if (!map.has(area)) map.set(area, []);
@@ -3585,13 +3574,17 @@ function DeliveryTab() {
     const idStr = String(orderId);
     const newStatus = pendingStatus.get(idStr) ?? null;
     const newRider = pendingRider.get(idStr);
-    const newRiderId = newRider ? BigInt(newRider) : null;
+    // Guard: only set riderId if a valid rider was selected (non-empty string)
+    const newRiderId = newRider && newRider !== "" ? BigInt(newRider) : null;
 
     setSavingOrder((prev) => new Set(prev).add(idStr));
     try {
-      const result = await (
-        actor as unknown as ActorWithUpdateOrder
-      ).updateOrder(orderId, newStatus, newRiderId, null);
+      const result = await actor.updateOrder(
+        orderId,
+        newStatus,
+        newRiderId,
+        null,
+      );
       if (result.__kind__ === "err") {
         toast.error(`Update failed: ${result.err}`);
         return;
@@ -3624,16 +3617,19 @@ function DeliveryTab() {
   };
 
   const handleBulkAssign = async () => {
-    if (!bulkRiderId || selectedOrders.size === 0) return;
+    if (!actor || !bulkRiderId || selectedOrders.size === 0) return;
     setBulkAssigning(true);
     const ids = Array.from(selectedOrders);
     let successCount = 0;
     let errorMsg = "";
     for (const id of ids) {
       try {
-        const result = await (
-          actor as unknown as ActorWithUpdateOrder
-        ).updateOrder(id, null, BigInt(bulkRiderId), null);
+        const result = await actor.updateOrder(
+          id,
+          null,
+          BigInt(bulkRiderId),
+          null,
+        );
         if (result.__kind__ === "err") {
           errorMsg = result.err;
         } else {
@@ -3657,9 +3653,7 @@ function DeliveryTab() {
   const handleSaveDeliveryNote = async (orderId: bigint, notes: string) => {
     if (!actor) return;
     try {
-      const result = await (
-        actor as unknown as ActorWithUpdateOrder
-      ).updateOrder(orderId, null, null, notes);
+      const result = await actor.updateOrder(orderId, null, null, notes);
       if (result.__kind__ === "err") {
         toast.error(`Save failed: ${result.err}`);
         return;

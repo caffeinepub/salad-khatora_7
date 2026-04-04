@@ -1,42 +1,35 @@
-# Salad Khatora
+# Salad Khatora — Rider Assignment Fix
 
 ## Current State
 
-The Orders & Delivery system uses a unified `ordersV2` database where each order contains delivery fields (`deliveryStatus`, `assignedRiderId`, `deliveryNotes`). However:
-
-1. The backend Candid IDL declarations were missing the delivery update functions (`updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`), so the frontend used unsafe `(actor as any)` casts for all delivery mutations.
-2. The `Order` IDL record definition omitted delivery fields, causing the canister response to silently drop `deliveryStatus`, `assignedRiderId`, and `deliveryNotes` during decoding.
-3. The DeliveryTab triggered status and rider updates immediately on `<Select>` change with no Save button, causing unintended API calls.
-4. Error handling used a generic fallback (`"Failed to update status"`) instead of showing the actual backend error.
+- Riders are stored in a `riders` Map in backend with `addRider`, `getAllRiders`, `updateRider`, `deleteRider` functions.
+- Orders use `assignedRiderId: ?Nat` to store the assigned rider's ID.
+- Backend has `assignOrderRider(orderId, riderId)` and `updateOrder(orderId, deliveryStatus?, assignedRiderId?, deliveryNotes?)` functions.
+- Frontend `DeliveryTab` fetches riders and orders on mount, shows a rider dropdown per order row, and saves via `updateOrder` on button click.
+- `backend.d.ts` declares a phantom `updateOrderRider` method that does not exist in `main.mo` — this would crash at runtime.
+- `getAllRiders()` in `backend.ts` returns raw Candid results without decoding.
+- Neither `assignOrderRider` nor `updateOrder` validates that the rider ID exists in the riders map.
+- No crash guard for null rider in frontend save handler — handled by null check but could be cleaner.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `updateOrder(orderId, deliveryStatus?, assignedRiderId?, deliveryNotes?)` Motoko function returning `Result<Order, Text>` — unified update that checks order exists, admin permission, and returns the updated order
-- `Result_Order` type in all declaration files
-- New `updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`, `updateOrder` typed methods in `backend.ts`
-- Per-row pending state (`pendingStatus`, `pendingRider`, `savingOrder`) in `DeliveryTab`
-- Save button per order row that appears when there are pending unsaved changes
-- `handleSaveOrderUpdate` unified save handler using `actor.updateOrder()`
+- Rider existence validation in `updateOrder` and `assignOrderRider` backend functions: if `assignedRiderId` is provided, verify it exists in `riders` map before updating.
+- Proper Rider decoder in `backend.ts` so `getAllRiders()` returns correctly typed objects.
 
 ### Modify
-- `Order` IDL record in `backend.did.js` (both exports and `idlFactory`) to include `deliveryStatus`, `assignedRiderId`, `deliveryTime`, `deliveryNotes` fields
-- `from_candid_record_n28` in `backend.ts` to decode the new delivery fields from canister responses
-- `handleDeliveryStatusChange` → `handleSelectStatus` (local pending state only, no API call)
-- `handleAssignOrderRider` → `handleSelectRider` (local pending state only, no API call)
-- `handleBulkAssign` and `handleSaveDeliveryNote` to use typed `actor.updateOrder()` with real error messages
-- `OrdersTable` inner component to accept and use pending state props
+- `updateOrder` in `main.mo`: when `assignedRiderId` is provided (Some), validate the rider exists and return `#err("Rider not found")` if it doesn't.
+- `assignOrderRider` in `main.mo`: same validation.
+- `backend.d.ts`: remove phantom `updateOrderRider` declaration; ensure `getAllRiders` return type is correct.
+- `backend.ts` `getAllRiders()`: decode result through a proper Rider decoder.
+- Frontend `DeliveryTab`: ensure no crash when rider not selected (empty string / null guard), show rider name next to ID in assignment dropdown and in order row.
 
 ### Remove
-- All `(actor as any)` casts for delivery mutations
-- Immediate API triggers on Select onChange for status and rider
-- Generic error messages suppressing actual backend errors
+- Phantom `updateOrderRider` from `backend.d.ts` interface.
 
 ## Implementation Plan
 
-1. Add `updateOrder` function to `src/backend/main.mo` after existing delivery functions
-2. Add `updateOrderDeliveryStatus`, `assignOrderRider`, `updateOrderDeliveryNotes`, `updateOrder` to `backend.did.d.ts` (_SERVICE interface) and add `Result_Order` type
-3. Update `Order` IDL and add `Result_Order` + 4 new functions to `backend.did.js` (both `idlService` and `idlFactory`)
-4. Update `backend.ts`: fix `from_candid_record_n28` to decode delivery fields, add 4 new typed methods, add `Result_Order` type and decoder
-5. Add `Result_Order` and `updateOrder` signature to `backend.d.ts`
-6. Fix `DeliveryTab` in `AdminPanel.tsx`: pending state, Save button per row, typed calls, real error messages
+1. Update `main.mo`: add rider existence check in `updateOrder` (when assignedRiderId is Some(?r), check `riders.get(r)`) and in `assignOrderRider`.
+2. Update `backend.d.ts`: remove `updateOrderRider`, keep rest.
+3. Update `backend.ts`: add `from_candid_Rider` decoder and use it in `getAllRiders()`.
+4. Update `AdminPanel.tsx` `DeliveryTab`: guard null/empty rider in save handlers, ensure comparisons use `String()` for bigint equality.

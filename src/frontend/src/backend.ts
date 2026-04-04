@@ -333,6 +333,10 @@ export interface backendInterface {
     updateIngredientStock(id: bigint, newQuantity: bigint): Promise<void>;
     updateLeadStatus(id: bigint, status: LeadStatus): Promise<boolean>;
     updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>): Promise<void>;
+    updateOrder(orderId: bigint, deliveryStatus: DeliveryStatus | null, assignedRiderId: bigint | null, deliveryNotes: string | null): Promise<Result_Order>;
+    updateOrderDeliveryNotes(orderId: bigint, notes: string): Promise<void>;
+    updateOrderDeliveryStatus(orderId: bigint, deliveryStatus: DeliveryStatus): Promise<void>;
+    assignOrderRider(orderId: bigint, riderId: bigint): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;
     updateRider(id: bigint, name: string, mobile: string, area: string): Promise<void>;

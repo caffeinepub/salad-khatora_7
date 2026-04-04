@@ -910,6 +910,11 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can assign riders");
     };
+    // Validate rider exists
+    switch (riders.get(riderId)) {
+      case (null) { Runtime.trap("Rider not found: ID " # riderId.toText()) };
+      case (?_) {};
+    };
     switch (ordersV2.get(orderId)) {
       case (?order) {
         ordersV2.add(orderId, {
@@ -963,6 +968,16 @@ actor {
   ) : async Result<Order, Text> {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return #err("Unauthorized: Only admins can update orders");
+    };
+    // Validate rider exists if one is being assigned
+    switch (assignedRiderId) {
+      case (?riderId) {
+        switch (riders.get(riderId)) {
+          case (null) { return #err("Rider not found: ID " # riderId.toText()) };
+          case (?_) {};
+        };
+      };
+      case (null) {};
     };
     switch (ordersV2.get(orderId)) {
       case (?order) {
