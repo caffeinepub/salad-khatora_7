@@ -303,6 +303,9 @@ export interface backendInterface {
     getAllReviews(): Promise<Array<Review>>;
     getAllRiders(): Promise<Array<Rider>>;
     getAllSubscriptionPlans(): Promise<Array<SubscriptionPlan>>;
+    createSubscriptionPlan(name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<bigint>;
+    updateSubscriptionPlan(id: bigint, name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<void>;
+    deleteSubscriptionPlan(id: bigint): Promise<void>;
     getAllSubscriptions(): Promise<Array<Subscription>>;
     getAllUsers(): Promise<Array<{
         principal: Principal;
@@ -345,7 +348,7 @@ export interface backendInterface {
     updateUserProfileByAdmin(user: Principal, profile: UserProfile): Promise<void>;
     validateCoupon(code: string): Promise<Coupon>;
 }
-import type { Coupon as _Coupon, DeliveryRecord as _DeliveryRecord, DeliveryStatus as _DeliveryStatus, DeliveryType as _DeliveryType, DiscountType as _DiscountType, Lead as _Lead, LeadStatus as _LeadStatus, Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, Result as _Result, Result_1 as _Result_1, Review as _Review, ReviewStatus as _ReviewStatus, Subscription as _Subscription, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { Coupon as _Coupon, DeliveryRecord as _DeliveryRecord, DeliveryStatus as _DeliveryStatus, DeliveryType as _DeliveryType, DiscountType as _DiscountType, Lead as _Lead, LeadStatus as _LeadStatus, Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, Result as _Result, Result_1 as _Result_1, Review as _Review, ReviewStatus as _ReviewStatus, Subscription as _Subscription, SubscriptionPlan as _SubscriptionPlan, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -729,15 +732,51 @@ export class Backend implements backendInterface {
     async getAllSubscriptionPlans(): Promise<Array<SubscriptionPlan>> {
         if (this.processError) {
             try {
-                const result = await (this.actor as any).getAllSubscriptionPlans();
-                return result;
+                const result = await this.actor.getAllSubscriptionPlans();
+                return from_candid_vec_SubscriptionPlan(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await (this.actor as any).getAllSubscriptionPlans();
-            return result;
+            const result = await this.actor.getAllSubscriptionPlans();
+            return from_candid_vec_SubscriptionPlan(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async createSubscriptionPlan(name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                return await this.actor.createSubscriptionPlan(name, totalMeals, price, validityDays, description);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.createSubscriptionPlan(name, totalMeals, price, validityDays, description);
+        }
+    }
+    async updateSubscriptionPlan(id: bigint, name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<void> {
+        if (this.processError) {
+            try {
+                return await this.actor.updateSubscriptionPlan(id, name, totalMeals, price, validityDays, description);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.updateSubscriptionPlan(id, name, totalMeals, price, validityDays, description);
+        }
+    }
+    async deleteSubscriptionPlan(id: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                return await this.actor.deleteSubscriptionPlan(id);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.deleteSubscriptionPlan(id);
         }
     }
     async getAllSubscriptions(): Promise<Array<Subscription>> {
@@ -1617,6 +1656,19 @@ function from_candid_vec_n33(_uploadFile: (file: ExternalBlob) => Promise<Uint8A
 }
 function from_candid_vec_n42(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Lead>): Array<Lead> {
     return value.map((x)=>from_candid_Lead_n43(_uploadFile, _downloadFile, x));
+}
+function from_candid_SubscriptionPlan(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SubscriptionPlan): SubscriptionPlan {
+    return {
+        id: value.id,
+        name: value.name,
+        totalMeals: value.totalMeals,
+        price: value.price,
+        validityDays: value.validityDays,
+        description: value.description,
+    };
+}
+function from_candid_vec_SubscriptionPlan(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_SubscriptionPlan>): Array<SubscriptionPlan> {
+    return value.map((x) => from_candid_SubscriptionPlan(_uploadFile, _downloadFile, x));
 }
 function to_candid_DeliveryStatus_n49(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: DeliveryStatus): _DeliveryStatus {
     return to_candid_variant_n50(_uploadFile, _downloadFile, value);

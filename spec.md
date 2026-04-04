@@ -1,35 +1,58 @@
-# Salad Khatora — Rider Assignment Fix
+# Salad Khatora
 
 ## Current State
 
-- Riders are stored in a `riders` Map in backend with `addRider`, `getAllRiders`, `updateRider`, `deleteRider` functions.
-- Orders use `assignedRiderId: ?Nat` to store the assigned rider's ID.
-- Backend has `assignOrderRider(orderId, riderId)` and `updateOrder(orderId, deliveryStatus?, assignedRiderId?, deliveryNotes?)` functions.
-- Frontend `DeliveryTab` fetches riders and orders on mount, shows a rider dropdown per order row, and saves via `updateOrder` on button click.
-- `backend.d.ts` declares a phantom `updateOrderRider` method that does not exist in `main.mo` — this would crash at runtime.
-- `getAllRiders()` in `backend.ts` returns raw Candid results without decoding.
-- Neither `assignOrderRider` nor `updateOrder` validates that the rider ID exists in the riders map.
-- No crash guard for null rider in frontend save handler — handled by null check but could be cleaner.
+The Subscription page (`Subscription.tsx`) calls `useSubscriptionPlans()` which calls `actor.getAllSubscriptionPlans()`. The backend has `getAllSubscriptionPlans()` returning `[SubscriptionPlan]`. However:
+
+1. **`backend.did.js`** — `SubscriptionPlan` record and `getAllSubscriptionPlans` function are MISSING from both the top-level exports section and the `idlFactory`. This causes the canister call to fail at the Candid layer, returning nothing.
+2. **`backend.did.d.ts`** — `SubscriptionPlan` interface and `getAllSubscriptionPlans` method are MISSING from `_SERVICE`.
+3. **`backend.ts`** — `getAllSubscriptionPlans()` uses `(this.actor as any)` and returns raw result WITHOUT decoding bigints (id, totalMeals, price, validityDays are `Nat` = bigint in Motoko but need proper mapping).
+4. **AdminPanel `SubscriptionsTab`** — Stores plans in **localStorage only**, never calls the backend. Plans created in admin panel are NOT saved to the canister, so `getAllSubscriptionPlans()` returns only the 2 seeded default plans (Weekly/Monthly) from the backend — but those can't be fetched either due to bug #1.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Rider existence validation in `updateOrder` and `assignOrderRider` backend functions: if `assignedRiderId` is provided, verify it exists in `riders` map before updating.
-- Proper Rider decoder in `backend.ts` so `getAllRiders()` returns correctly typed objects.
+- `SubscriptionPlan` record to `backend.did.js` exports section
+- `getAllSubscriptionPlans` function to `backend.did.js` exports section
+- `SubscriptionPlan` record to `idlFactory` in `backend.did.js`
+- `getAllSubscriptionPlans` function to `idlFactory` service in `backend.did.js`
+- `SubscriptionPlan` interface to `backend.did.d.ts`
+- `getAllSubscriptionPlans` to `_SERVICE` interface in `backend.did.d.ts`
+- `createSubscriptionPlan`, `updateSubscriptionPlan`, `deleteSubscriptionPlan` to `backend.did.js` and `backend.did.d.ts`
+- Proper SubscriptionPlan decoder in `backend.ts`
+- `createSubscriptionPlan`, `updateSubscriptionPlan`, `deleteSubscriptionPlan` typed methods in `backend.ts`
+- Backend-wired plan CRUD in AdminPanel `SubscriptionsTab` (replace localStorage with canister calls)
+- Console log in `useSubscriptionPlans` to debug plan data
+- Fallback message on Subscription page if no plans (already exists, confirm it shows)
 
 ### Modify
-- `updateOrder` in `main.mo`: when `assignedRiderId` is provided (Some), validate the rider exists and return `#err("Rider not found")` if it doesn't.
-- `assignOrderRider` in `main.mo`: same validation.
-- `backend.d.ts`: remove phantom `updateOrderRider` declaration; ensure `getAllRiders` return type is correct.
-- `backend.ts` `getAllRiders()`: decode result through a proper Rider decoder.
-- Frontend `DeliveryTab`: ensure no crash when rider not selected (empty string / null guard), show rider name next to ID in assignment dropdown and in order row.
+- `getAllSubscriptionPlans()` in `backend.ts` to use proper decoder instead of returning raw result
+- AdminPanel `SubscriptionsTab`: `savePlan` → call `actor.createSubscriptionPlan` or `actor.updateSubscriptionPlan` instead of localStorage
+- AdminPanel `SubscriptionsTab`: `confirmDelete` → call `actor.deleteSubscriptionPlan` instead of localStorage
+- AdminPanel `SubscriptionsTab`: `useEffect` → also fetch `getAllSubscriptionPlans` from backend on load
 
 ### Remove
-- Phantom `updateOrderRider` from `backend.d.ts` interface.
+- `loadLocalPlans()`, `saveLocalPlans()`, `PLANS_KEY`, `DEFAULT_PLANS` from AdminPanel (localStorage plan storage)
 
 ## Implementation Plan
 
-1. Update `main.mo`: add rider existence check in `updateOrder` (when assignedRiderId is Some(?r), check `riders.get(r)`) and in `assignOrderRider`.
-2. Update `backend.d.ts`: remove `updateOrderRider`, keep rest.
-3. Update `backend.ts`: add `from_candid_Rider` decoder and use it in `getAllRiders()`.
-4. Update `AdminPanel.tsx` `DeliveryTab`: guard null/empty rider in save handlers, ensure comparisons use `String()` for bigint equality.
+1. **Fix `backend.did.js`**: Add `SubscriptionPlan` IDL record (`{ id: Nat, name: Text, totalMeals: Nat, price: Nat, validityDays: Nat, description: Text }`) to both the top-level exports and the `idlFactory`. Add `getAllSubscriptionPlans: IDL.Func([], [IDL.Vec(SubscriptionPlan)], ['query'])` and `createSubscriptionPlan`, `updateSubscriptionPlan`, `deleteSubscriptionPlan` to both sections.
+
+2. **Fix `backend.did.d.ts`**: Add `SubscriptionPlan` interface and all 4 plan methods to `_SERVICE`.
+
+3. **Fix `backend.ts`**: 
+   - Add `from_candid_SubscriptionPlan` decoder that properly maps bigints
+   - Fix `getAllSubscriptionPlans()` to use the decoder
+   - Add typed `createSubscriptionPlan`, `updateSubscriptionPlan`, `deleteSubscriptionPlan` methods
+
+4. **Fix AdminPanel `SubscriptionsTab`**:
+   - Remove localStorage functions and DEFAULT_PLANS
+   - Load plans from `actor.getAllSubscriptionPlans()` in the existing useEffect
+   - Store plans as `SubscriptionPlan[]` type (bigint fields)
+   - `savePlan`: call `actor.createSubscriptionPlan(name, BigInt(totalMeals), BigInt(price), BigInt(validityDays), description)` or `actor.updateSubscriptionPlan(id, ...)` 
+   - `confirmDelete`: call `actor.deleteSubscriptionPlan(BigInt(planId))`
+   - Refresh plans list after create/update/delete
+
+5. **Fix `useQueries.ts`**: Add `console.log` debug in `useSubscriptionPlans` queryFn to log fetched data.
+
+6. Validate: typecheck + build must pass.

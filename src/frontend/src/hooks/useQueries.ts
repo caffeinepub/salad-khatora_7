@@ -64,7 +64,9 @@ export function useSubscriptionPlans() {
     queryKey: ["subscriptionPlans"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllSubscriptionPlans();
+      const result = await actor.getAllSubscriptionPlans();
+      console.log("[useSubscriptionPlans] fetched plans:", result);
+      return result;
     },
     enabled: !!actor && !isFetching,
     staleTime: 5 * 60 * 1000,

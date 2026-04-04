@@ -130,6 +130,14 @@ export const Subscription = IDL.Record({
   'startDate' : Time,
   'expiryDate' : Time,
 });
+export const SubscriptionPlan = IDL.Record({
+  'id' : IDL.Nat,
+  'name' : IDL.Text,
+  'totalMeals' : IDL.Nat,
+  'price' : IDL.Nat,
+  'validityDays' : IDL.Nat,
+  'description' : IDL.Text,
+});
 export const UserProfile = IDL.Record({
   'age' : IDL.Nat,
   'heightCm' : IDL.Nat,
@@ -227,6 +235,10 @@ export const idlService = IDL.Service({
   'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
   'getAllRiders' : IDL.Func([], [IDL.Vec(Rider)], ['query']),
   'getAllSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], ['query']),
+  'getAllSubscriptionPlans' : IDL.Func([], [IDL.Vec(SubscriptionPlan)], ['query']),
+  'createSubscriptionPlan' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [IDL.Nat], []),
+  'updateSubscriptionPlan' : IDL.Func([IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [], []),
+  'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
   'getAllUsers' : IDL.Func(
       [],
       [
@@ -429,7 +441,15 @@ export const idlFactory = ({ IDL }) => {
     'startDate' : Time,
     'expiryDate' : Time,
   });
-  const UserProfile = IDL.Record({
+  const SubscriptionPlan = IDL.Record({
+    'id' : IDL.Nat,
+    'name' : IDL.Text,
+    'totalMeals' : IDL.Nat,
+    'price' : IDL.Nat,
+    'validityDays' : IDL.Nat,
+    'description' : IDL.Text,
+  });
+    const UserProfile = IDL.Record({
     'age' : IDL.Nat,
     'heightCm' : IDL.Nat,
     'dietaryPreferences' : IDL.Vec(IDL.Text),
@@ -526,6 +546,10 @@ export const idlFactory = ({ IDL }) => {
     'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
     'getAllRiders' : IDL.Func([], [IDL.Vec(Rider)], ['query']),
     'getAllSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], ['query']),
+    'getAllSubscriptionPlans' : IDL.Func([], [IDL.Vec(SubscriptionPlan)], ['query']),
+    'createSubscriptionPlan' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [IDL.Nat], []),
+    'updateSubscriptionPlan' : IDL.Func([IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [], []),
+    'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
     'getAllUsers' : IDL.Func(
         [],
         [

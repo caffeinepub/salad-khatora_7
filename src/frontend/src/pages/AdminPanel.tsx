@@ -80,7 +80,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../auth-context";
 import {
@@ -1554,7 +1554,7 @@ function UsersTab() {
 }
 
 // ─── Subscriptions Tab ───────────────────────────────────────────────────────
-// Local SubscriptionPlan type (backend types may vary)
+// Local SubscriptionPlan type mapped from backend (id as string for display)
 interface SubscriptionPlanLocal {
   id: string;
   name: string;
@@ -1564,49 +1564,9 @@ interface SubscriptionPlanLocal {
   description: string;
 }
 
-// Default plans seeded locally for display
-const DEFAULT_PLANS: SubscriptionPlanLocal[] = [
-  {
-    id: "weekly",
-    name: "Weekly",
-    totalMeals: 6,
-    price: 599,
-    validityDays: 7,
-    description:
-      "6 fresh salads over 7 days. Perfect for a weekly health kick.",
-  },
-  {
-    id: "monthly",
-    name: "Monthly",
-    totalMeals: 24,
-    price: 1999,
-    validityDays: 30,
-    description:
-      "24 salads over 30 days. Best value for committed health enthusiasts.",
-  },
-];
-
-const PLANS_KEY = "sk_admin_plans_v1";
-
-function loadLocalPlans(): SubscriptionPlanLocal[] {
-  try {
-    const raw = localStorage.getItem(PLANS_KEY);
-    if (raw) return JSON.parse(raw) as SubscriptionPlanLocal[];
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_PLANS;
-}
-
-function saveLocalPlans(plans: SubscriptionPlanLocal[]) {
-  localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
-}
-
 function SubscriptionsTab() {
   const { actor, isFetching } = useActor();
-  const [plans, setPlans] = useState<SubscriptionPlanLocal[]>(() =>
-    loadLocalPlans(),
-  );
+  const [plans, setPlans] = useState<SubscriptionPlanLocal[]>([]);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1630,6 +1590,26 @@ function SubscriptionsTab() {
   const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
 
+  const loadPlansFromBackend = useCallback(async () => {
+    if (!actor) return;
+    try {
+      const backendPlans = await actor.getAllSubscriptionPlans();
+      setPlans(
+        backendPlans.map((p) => ({
+          id: String(p.id),
+          name: p.name,
+          totalMeals: Number(p.totalMeals),
+          price: Number(p.price),
+          validityDays: Number(p.validityDays),
+          description: p.description,
+        })),
+      );
+    } catch {
+      toast.error("Failed to load plans");
+    }
+  }, [actor]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasLoadedRef is stable, loadPlansFromBackend captured in separate callback
   useEffect(() => {
     if (!actor || isFetching || hasLoadedRef.current) return;
     hasLoadedRef.current = true;
@@ -1638,21 +1618,22 @@ function SubscriptionsTab() {
         const [s, u] = await Promise.all([
           actor.getAllSubscriptions(),
           actor.getAllUsers() as unknown as Promise<UserRecord[]>,
+          loadPlansFromBackend(),
         ]);
         const sorted = [...s].sort((a, b) => {
           const aActive = a.status === Variant_active_expired.active;
           const bActive = b.status === Variant_active_expired.active;
           return aActive === bActive ? 0 : aActive ? -1 : 1;
         });
-        setSubs(sorted);
-        setUsers(u);
+        setSubs(sorted as Subscription[]);
+        setUsers(u as unknown as UserRecord[]);
       } catch {
         toast.error("Failed to load subscription data");
       } finally {
         setLoading(false);
       }
     })();
-  }, [actor, isFetching]);
+  }, [actor, isFetching, loadPlansFromBackend]);
 
   const openAddPlan = () => {
     setEditingPlan(null);
@@ -1678,51 +1659,53 @@ function SubscriptionsTab() {
     setPlanDialog(true);
   };
 
-  const savePlan = () => {
+  const savePlan = async () => {
+    if (!actor) return;
     const { name, totalMeals, price, validityDays, description } = planForm;
     if (!name || !totalMeals || !price || !validityDays || !description) {
       toast.error("All fields are required");
       return;
     }
     setPlanSaving(true);
-    const updated = editingPlan
-      ? plans.map((p) =>
-          p.id === editingPlan.id
-            ? {
-                ...p,
-                name,
-                totalMeals: Number(totalMeals),
-                price: Number(price),
-                validityDays: Number(validityDays),
-                description,
-              }
-            : p,
-        )
-      : [
-          ...plans,
-          {
-            id: Date.now().toString(),
-            name,
-            totalMeals: Number(totalMeals),
-            price: Number(price),
-            validityDays: Number(validityDays),
-            description,
-          },
-        ];
-    setPlans(updated);
-    saveLocalPlans(updated);
-    setPlanDialog(false);
-    setPlanSaving(false);
-    toast.success(editingPlan ? "Plan updated" : "Plan created");
+    try {
+      if (editingPlan) {
+        await actor.updateSubscriptionPlan(
+          BigInt(editingPlan.id),
+          name,
+          BigInt(totalMeals),
+          BigInt(price),
+          BigInt(validityDays),
+          description,
+        );
+      } else {
+        await actor.createSubscriptionPlan(
+          name,
+          BigInt(totalMeals),
+          BigInt(price),
+          BigInt(validityDays),
+          description,
+        );
+      }
+      await loadPlansFromBackend();
+      setPlanDialog(false);
+      toast.success(editingPlan ? "Plan updated" : "Plan created");
+    } catch {
+      toast.error("Failed to save plan");
+    } finally {
+      setPlanSaving(false);
+    }
   };
 
-  const confirmDelete = () => {
-    if (!deletePlanId) return;
-    const updated = plans.filter((p) => p.id !== deletePlanId);
-    setPlans(updated);
-    saveLocalPlans(updated);
-    setDeletePlanId(null);
-    toast.success("Plan deleted");
+  const confirmDelete = async () => {
+    if (!actor || !deletePlanId) return;
+    try {
+      await actor.deleteSubscriptionPlan(BigInt(deletePlanId));
+      await loadPlansFromBackend();
+      setDeletePlanId(null);
+      toast.success("Plan deleted");
+    } catch {
+      toast.error("Failed to delete plan");
+    }
   };
 
   const toggleStatus = async (sub: Subscription) => {

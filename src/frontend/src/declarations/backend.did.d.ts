@@ -134,6 +134,14 @@ export interface Subscription {
   'startDate' : Time,
   'expiryDate' : Time,
 }
+export interface SubscriptionPlan {
+  'id' : bigint,
+  'name' : string,
+  'totalMeals' : bigint,
+  'price' : bigint,
+  'validityDays' : bigint,
+  'description' : string,
+}
 export type Time = bigint;
 export interface UserMeta { 'notes' : Array<UserNote>, 'isVip' : boolean }
 export interface UserNote { 'id' : bigint, 'createdAt' : Time, 'text' : string }
@@ -186,6 +194,10 @@ export interface _SERVICE {
   'getAllReviews' : ActorMethod<[], Array<Review>>,
   'getAllRiders' : ActorMethod<[], Array<Rider>>,
   'getAllSubscriptions' : ActorMethod<[], Array<Subscription>>,
+  'getAllSubscriptionPlans' : ActorMethod<[], Array<SubscriptionPlan>>,
+  'createSubscriptionPlan' : ActorMethod<[string, bigint, bigint, bigint, string], bigint>,
+  'updateSubscriptionPlan' : ActorMethod<[bigint, string, bigint, bigint, bigint, string], undefined>,
+  'deleteSubscriptionPlan' : ActorMethod<[bigint], undefined>,
   'getAllUsers' : ActorMethod<
     [],
     Array<{ 'principal' : Principal, 'profile' : UserProfile }>
