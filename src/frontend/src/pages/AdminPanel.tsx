@@ -3476,15 +3476,16 @@ function DeliveryTab() {
 
   const filteredOrders = orders.filter((o) => {
     const status = o.deliveryStatus ?? DeliveryStatus.preparing;
+    const isDelivered = status === DeliveryStatus.delivered;
     if (filter === "active")
       return (
         status === DeliveryStatus.preparing || status === DeliveryStatus.ready
       );
     if (filter === "outForDelivery")
       return status === DeliveryStatus.outForDelivery;
-    if (filter === "delivered") return status === DeliveryStatus.delivered;
-    if (filter === "unassigned") return !o.assignedRiderId;
-    if (filter === "assigned") return !!o.assignedRiderId;
+    if (filter === "delivered") return isDelivered;
+    if (filter === "unassigned") return !o.assignedRiderId && !isDelivered;
+    if (filter === "assigned") return !!o.assignedRiderId && !isDelivered;
     return true;
   });
 
@@ -3508,8 +3509,14 @@ function DeliveryTab() {
       (o.deliveryStatus ?? DeliveryStatus.preparing) ===
       DeliveryStatus.delivered,
   ).length;
-  const unassignedCount = orders.filter((o) => !o.assignedRiderId).length;
-  const assignedCount = orders.filter((o) => !!o.assignedRiderId).length;
+  const unassignedCount = orders.filter((o) => {
+    const s = o.deliveryStatus ?? DeliveryStatus.preparing;
+    return !o.assignedRiderId && s !== DeliveryStatus.delivered;
+  }).length;
+  const assignedCount = orders.filter((o) => {
+    const s = o.deliveryStatus ?? DeliveryStatus.preparing;
+    return !!o.assignedRiderId && s !== DeliveryStatus.delivered;
+  }).length;
 
   // Rider workload map
   const riderWorkload = new Map<string, number>();
