@@ -14,7 +14,19 @@ declare global {
   }
 }
 
-const queryClient = new QueryClient();
+// Disable all automatic re-fetching to prevent reconnect loops and API floods.
+// Data is fetched once on mount and only again on explicit user action.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      staleTime: Number.POSITIVE_INFINITY,
+      retry: 1,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
