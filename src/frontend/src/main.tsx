@@ -14,16 +14,19 @@ declare global {
   }
 }
 
-// Disable all automatic re-fetching to prevent reconnect loops and API floods.
-// Data is fetched once on mount and only again on explicit user action.
+// Disable all automatic background refetching.
+// This is critical to prevent "connection lost / reconnecting" loops:
+//   - refetchOnWindowFocus: true causes re-fetch on every tab switch
+//   - refetchOnReconnect: true causes re-fetch on every network event
+//   - staleTime: 0 means every query is immediately stale and will re-fetch
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      refetchOnMount: false,
       staleTime: Number.POSITIVE_INFINITY,
-      retry: 1,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
     },
   },
 });

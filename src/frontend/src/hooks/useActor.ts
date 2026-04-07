@@ -9,8 +9,8 @@ const ACTOR_QUERY_KEY = "actor";
 export function useActor() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
-  // Track the last actor instance to avoid re-invalidating on identical references
-  const prevActorRef = useRef<backendInterface | null>(null);
+  // Track the last actor instance we invalidated for, to avoid duplicate invalidations
+  const lastInvalidatedActorRef = useRef<backendInterface | null>(null);
 
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
@@ -35,20 +35,24 @@ export function useActor() {
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 
-  // When the actor instance actually changes, invalidate dependent queries.
-  // Do NOT call refetchQueries — that floods all queries simultaneously.
+  // When the actor instance actually changes (not just re-renders),
+  // invalidate dependent queries — but NEVER refetch them (that floods API).
   useEffect(() => {
-    if (actorQuery.data && actorQuery.data !== prevActorRef.current) {
-      prevActorRef.current = actorQuery.data;
+    if (
+      actorQuery.data &&
+      actorQuery.data !== lastInvalidatedActorRef.current
+    ) {
+      lastInvalidatedActorRef.current = actorQuery.data;
       queryClient.invalidateQueries({
         predicate: (query) => {
           return !query.queryKey.includes(ACTOR_QUERY_KEY);
         },
       });
+      // DO NOT call refetchQueries here — that force-fires ALL queries simultaneously
+      // causing API flooding. Queries will refetch lazily when they are next accessed.
     }
   }, [actorQuery.data, queryClient]);
 

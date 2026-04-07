@@ -10,11 +10,13 @@ interface ConnectionManagerResult {
 
 // Require 3 consecutive failures before marking offline
 const FAILURE_THRESHOLD = 3;
-// Delay first health check so the app fully initializes before probing
-const INITIAL_DELAY_MS = 8000;
-// Poll every 30s when healthy, 10s when recovering
-const HEALTHY_INTERVAL_MS = 30000;
-const RECOVERY_INTERVAL_MS = 10000;
+// Delay first health check — gives ICP canister time to fully initialize
+// Increased to 15s to handle slow canister startups reliably
+const INITIAL_DELAY_MS = 15000;
+// Poll every 60s when healthy (reduced frequency = fewer false alarms)
+const HEALTHY_INTERVAL_MS = 60000;
+// Poll every 15s when recovering
+const RECOVERY_INTERVAL_MS = 15000;
 
 export function useConnectionManager(
   actor: backendInterface | null,
@@ -31,6 +33,8 @@ export function useConnectionManager(
   const onReconnectRef = useRef(onReconnect);
   // Guard against concurrent health checks
   const isCheckingRef = useRef(false);
+  // Track whether initial delay has passed — don't respond to window events before that
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     actorRef.current = actor;
@@ -77,6 +81,7 @@ export function useConnectionManager(
   useEffect(() => {
     // Delay first probe — avoids false alarms during app startup
     initTimerRef.current = setTimeout(() => {
+      initializedRef.current = true;
       scheduleNext(HEALTHY_INTERVAL_MS);
     }, INITIAL_DELAY_MS);
 
@@ -88,6 +93,8 @@ export function useConnectionManager(
 
   useEffect(() => {
     const handleOffline = () => {
+      // Only react to offline events after initialization
+      if (!initializedRef.current) return;
       stateRef.current.isOnline = false;
       stateRef.current.failureCount = 0;
       setIsOnline(false);
@@ -95,7 +102,10 @@ export function useConnectionManager(
       scheduleNext(RECOVERY_INTERVAL_MS);
     };
     const handleOnline = () => {
-      if (!stateRef.current.isOnline) setConnectionStatus("reconnecting");
+      // Don't show "reconnecting" from the window.online event alone —
+      // this fires on any network change (wifi switch, etc.) and is unreliable.
+      // We only update status based on actual canister health check results.
+      // So we deliberately do nothing here.
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
