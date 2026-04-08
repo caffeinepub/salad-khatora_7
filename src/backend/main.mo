@@ -531,15 +531,16 @@ actor {
     };
 
     // ── Phase 1: Validate all ingredient stock BEFORE any deduction ─────────────
-    // Accumulate required quantities per ingredientId across all order items
-    // using a local Map so we check net totals correctly
+    // Accumulate required quantities per ingredientId across ALL order items,
+    // multiplied by item.quantity, before any stock check or deduction.
     let needed = Map.empty<Nat, Nat>();
     for (item in items.values()) {
-      // Look up the menu item by name in V4
-      switch (menuItemsV4.entries().find(func((_, m)) { m.name == item.saladName })) {
+      // Look up the menu item by name in V4 first
+      switch (menuItemsV4.entries().find(func((_, m) : (Nat, MenuItem)) : Bool { m.name == item.saladName })) {
         case (?(_, menuItem)) {
+          // Accumulate: each ingredient × item quantity ordered
           for (link in menuItem.linkedIngredients.values()) {
-            let totalForLink = item.quantity * link.quantityGrams;
+            let totalForLink = link.quantityGrams * item.quantity;
             let existing = switch (needed.get(link.ingredientId)) {
               case (?n) { n };
               case (null) { 0 };
@@ -548,16 +549,22 @@ actor {
           };
         };
         case (null) {
-          // Item not found in V4 — check legacy menuItemIngredients
+          // Not in V4 — fall back to legacy menuItemIngredients list
+          var foundInLegacy = false;
           for (link in menuItemIngredients.values()) {
             if (link.menuItemName == item.saladName) {
-              let totalForLink = item.quantity * link.quantityPerOrder;
+              foundInLegacy := true;
+              let totalForLink = link.quantityPerOrder * item.quantity;
               let existing = switch (needed.get(link.ingredientId)) {
                 case (?n) { n };
                 case (null) { 0 };
               };
               needed.add(link.ingredientId, existing + totalForLink);
             };
+          };
+          // If the item was not found in either source, block the order
+          if (not foundInLegacy) {
+            return #err("Menu item not found: \"" # item.saladName # "\". Cannot verify ingredient stock. Order blocked.");
           };
         };
       };
