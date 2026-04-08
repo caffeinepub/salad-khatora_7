@@ -9,9 +9,8 @@ import Runtime "mo:core/Runtime";
 import Text "mo:core/Text";
 
 
-// Mixins must be imported directly from their file path
-import MixinAuthorization "authorization/MixinAuthorization";
-import AccessControl "authorization/access-control";
+import MixinAuthorization "mo:caffeineai-authorization/MixinAuthorization";
+import AccessControl "mo:caffeineai-authorization/access-control";
 
 
 
@@ -515,21 +514,76 @@ actor {
     firstAdminClaimed := true;
   };
 
-  // Place an order — writes to ordersV2 with delivery fields, deducts 1 meal from subscription
-  public shared ({ caller }) func placeOrder(items : [OrderItem], totalAmount : Nat, deliveryType : DeliveryType) : async () {
+  // Place an order — validates stock BEFORE deducting, returns Result<Nat, Text>
+  public shared ({ caller }) func placeOrder(items : [OrderItem], totalAmount : Nat, deliveryType : DeliveryType) : async Result<Nat, Text> {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can place orders");
+      return #err("Unauthorized: Only users can place orders");
     };
     // Block order if subscription exists but meals are exhausted
     switch (subscriptionsV2.get(caller)) {
       case (?sub) {
         let now = Time.now();
         if (sub.saladsRemaining == 0 or sub.status == #expired or sub.expiryDate <= now) {
-          Runtime.trap("Your subscription has ended, please renew it to continue ordering.");
+          return #err("Your subscription has ended, please renew it to continue ordering.");
         };
       };
       case (null) {};
     };
+
+    // ── Phase 1: Validate all ingredient stock BEFORE any deduction ─────────────
+    // Accumulate required quantities per ingredientId across all order items
+    // using a local Map so we check net totals correctly
+    let needed = Map.empty<Nat, Nat>();
+    for (item in items.values()) {
+      // Look up the menu item by name in V4
+      switch (menuItemsV4.entries().find(func((_, m)) { m.name == item.saladName })) {
+        case (?(_, menuItem)) {
+          for (link in menuItem.linkedIngredients.values()) {
+            let totalForLink = item.quantity * link.quantityGrams;
+            let existing = switch (needed.get(link.ingredientId)) {
+              case (?n) { n };
+              case (null) { 0 };
+            };
+            needed.add(link.ingredientId, existing + totalForLink);
+          };
+        };
+        case (null) {
+          // Item not found in V4 — check legacy menuItemIngredients
+          for (link in menuItemIngredients.values()) {
+            if (link.menuItemName == item.saladName) {
+              let totalForLink = item.quantity * link.quantityPerOrder;
+              let existing = switch (needed.get(link.ingredientId)) {
+                case (?n) { n };
+                case (null) { 0 };
+              };
+              needed.add(link.ingredientId, existing + totalForLink);
+            };
+          };
+        };
+      };
+    };
+
+    // Check every required ingredient has sufficient stock
+    for ((ingredientId, totalNeeded) in needed.entries()) {
+      switch (ingredients.get(ingredientId)) {
+        case (?ingredient) {
+          if (ingredient.quantityInStock < totalNeeded) {
+            let shortfall = Nat.sub(totalNeeded, ingredient.quantityInStock);
+            return #err(
+              "Insufficient stock for: " # ingredient.name #
+              ". Need " # totalNeeded.toText() # ingredient.unit #
+              ", have " # ingredient.quantityInStock.toText() # ingredient.unit #
+              " (short by " # shortfall.toText() # ingredient.unit # "). Order blocked."
+            );
+          };
+        };
+        case (null) {
+          // Ingredient deleted from inventory — skip silently
+        };
+      };
+    };
+
+    // ── Phase 2: All checks passed — create order ────────────────────────────────
     let id = nextOrderId;
     nextOrderId += 1;
 
@@ -547,7 +601,7 @@ actor {
       createdAt = Time.now();
     };
 
-    // Deduct 1 meal from subscription if active and meals remain
+    // ── Phase 3: Deduct 1 meal from subscription if active ───────────────────────
     switch (subscriptionsV2.get(caller)) {
       case (?sub) {
         let now = Time.now();
@@ -573,59 +627,24 @@ actor {
       case (null) {};
     };
 
-    // Deduct ingredients: first try V3 linkedIngredients, then fall back to old menuItemIngredients
-    for (item in items.values()) {
-      var deductedFromV3 = false;
-      // Try V3 linked ingredients
-      for ((_, menuItem) in menuItemsV4.toArray().values()) {
-        if (menuItem.name == item.saladName) {
-          for (link in menuItem.linkedIngredients.values()) {
-            switch (ingredients.get(link.ingredientId)) {
-              case (?ingredient) {
-                let totalNeeded = item.quantity * link.quantityGrams;
-                let newQuantity = if (ingredient.quantityInStock > totalNeeded) {
-                  Nat.sub(ingredient.quantityInStock, totalNeeded)
-                } else { 0 };
-                ingredients.add(link.ingredientId, {
-                  id = ingredient.id;
-                  name = ingredient.name;
-                  unit = ingredient.unit;
-                  quantityInStock = newQuantity;
-                  lowStockThreshold = ingredient.lowStockThreshold;
-                });
-              };
-              case (null) {};
-            };
-          };
-          deductedFromV3 := true;
+    // ── Phase 4: Deduct ingredients atomically (all validated above) ─────────────
+    for ((ingredientId, totalNeeded) in needed.entries()) {
+      switch (ingredients.get(ingredientId)) {
+        case (?ingredient) {
+          ingredients.add(ingredientId, {
+            id = ingredient.id;
+            name = ingredient.name;
+            unit = ingredient.unit;
+            quantityInStock = Nat.sub(ingredient.quantityInStock, totalNeeded);
+            lowStockThreshold = ingredient.lowStockThreshold;
+          });
         };
-      };
-      // Fallback to old menuItemIngredients
-      if (not deductedFromV3) {
-        for (link in menuItemIngredients.values()) {
-          if (link.menuItemName == item.saladName) {
-            switch (ingredients.get(link.ingredientId)) {
-              case (?ingredient) {
-                let totalNeeded = item.quantity * link.quantityPerOrder;
-                let newQuantity = if (ingredient.quantityInStock > totalNeeded) {
-                  Nat.sub(ingredient.quantityInStock, totalNeeded) } else { 0
-                };
-                ingredients.add(link.ingredientId, {
-                  id = ingredient.id;
-                  name = ingredient.name;
-                  unit = ingredient.unit;
-                  quantityInStock = newQuantity;
-                  lowStockThreshold = ingredient.lowStockThreshold;
-                });
-              };
-              case (null) {};
-            };
-          };
-        };
+        case (null) {};
       };
     };
 
     ordersV2.add(id, newOrder);
+    #ok(id)
   };
 
   public query ({ caller }) func getUserOrders() : async [Order] {

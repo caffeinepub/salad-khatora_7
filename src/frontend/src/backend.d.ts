@@ -17,7 +17,69 @@ export interface DeliveryRecord {
     address: string;
     notes: string;
 }
+export type Result_2 = {
+    __kind__: "ok";
+    ok: bigint;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export type Time = bigint;
+export interface OrderItem {
+    saladName: string;
+    quantity: bigint;
+    price: bigint;
+}
+export type Result_1 = {
+    __kind__: "ok";
+    ok: Order;
+} | {
+    __kind__: "err";
+    err: string;
+};
+export interface Subscription {
+    status: Variant_active_expired;
+    saladsRemaining: bigint;
+    planId: bigint;
+    expiryDate: Time;
+    user: Principal;
+    planName: string;
+    startDate: Time;
+}
+export interface Lead {
+    id: bigint;
+    status: LeadStatus;
+    date: Time;
+    name: string;
+    mobile: string;
+}
+export interface UserMeta {
+    notes: Array<UserNote>;
+    isVip: boolean;
+}
+export interface SubscriptionPlan {
+    id: bigint;
+    totalMeals: bigint;
+    name: string;
+    description: string;
+    validityDays: bigint;
+    price: bigint;
+}
+export type DeliveryType = {
+    __kind__: "scheduled";
+    scheduled: Time;
+} | {
+    __kind__: "instant";
+    instant: null;
+};
+export interface Review {
+    id: string;
+    status: ReviewStatus;
+    userName: string;
+    date: bigint;
+    comment: string;
+    rating: bigint;
+}
 export interface Coupon {
     id: bigint;
     discountValue: bigint;
@@ -25,11 +87,6 @@ export interface Coupon {
     code: string;
     discountType: DiscountType;
     isActive: boolean;
-}
-export interface OrderItem {
-    saladName: string;
-    quantity: bigint;
-    price: bigint;
 }
 export interface Rider {
     id: bigint;
@@ -42,29 +99,15 @@ export interface MenuItemIngredient {
     ingredientId: bigint;
     quantityPerOrder: bigint;
 }
-export type Result_1 = {
-    __kind__: "ok";
-    ok: null;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type Result_Order = {
-    __kind__: "ok";
-    ok: Order;
-} | {
-    __kind__: "err";
-    err: string;
-};
 export interface Order {
     id: bigint;
     status: OrderStatus;
-    deliveryStatus: DeliveryStatus;
-    assignedRiderId?: bigint;
-    deliveryTime?: bigint;
-    deliveryNotes: string;
     createdAt: Time;
     user: Principal;
+    deliveryNotes: string;
+    deliveryStatus: DeliveryStatus;
+    assignedRiderId?: bigint;
+    deliveryTime?: Time;
     deliveryType: {
         __kind__: "scheduled";
         scheduled: Time;
@@ -75,45 +118,18 @@ export interface Order {
     totalAmount: bigint;
     items: Array<OrderItem>;
 }
-export interface SubscriptionPlan {
-    id: bigint;
-    name: string;
-    totalMeals: bigint;
-    price: bigint;
-    validityDays: bigint;
-    description: string;
-}
-export interface Subscription {
-    status: Variant_active_expired;
-    saladsRemaining: bigint;
-    user: Principal;
-    planId: bigint;
-    planName: string;
-    startDate: Time;
-    expiryDate: Time;
-}
-export interface BowlSize {
-    size: string;
-    price: bigint;
-    calories: bigint;
-    protein: bigint;
-}
-export interface LinkedIngredient {
-    ingredientId: bigint;
-    quantityGrams: bigint;
-}
 export interface MenuItem {
     id: bigint;
     calories: bigint;
     name: string;
     tags: Array<string>;
+    linkedIngredients: Array<LinkedIngredient>;
+    sizes: Array<BowlSize>;
     enabled: boolean;
+    imageUrl: string;
     price: bigint;
     ingredients: Array<string>;
     protein: bigint;
-    sizes: Array<BowlSize>;
-    linkedIngredients: Array<LinkedIngredient>;
-    imageUrl: string;
 }
 export interface UserNote {
     id: bigint;
@@ -127,16 +143,16 @@ export type Result = {
     __kind__: "err";
     err: string;
 };
-export interface Lead {
-    id: bigint;
-    status: LeadStatus;
-    date: Time;
-    name: string;
-    mobile: string;
-}
-export interface UserMeta {
-    notes: Array<UserNote>;
-    isVip: boolean;
+export type Result_3 = {
+    __kind__: "ok";
+    ok: null;
+} | {
+    __kind__: "err";
+    err: string;
+};
+export interface LinkedIngredient {
+    quantityGrams: bigint;
+    ingredientId: bigint;
 }
 export interface Ingredient {
     id: bigint;
@@ -145,13 +161,6 @@ export interface Ingredient {
     name: string;
     unit: string;
 }
-export type DeliveryType = {
-    __kind__: "scheduled";
-    scheduled: Time;
-} | {
-    __kind__: "instant";
-    instant: null;
-};
 export interface UserProfile {
     age: bigint;
     heightCm: bigint;
@@ -163,13 +172,11 @@ export interface UserProfile {
     address: string;
     mobile: string;
 }
-export interface Review {
-    id: string;
-    status: ReviewStatus;
-    userName: string;
-    date: bigint;
-    comment: string;
-    rating: bigint;
+export interface BowlSize {
+    calories: bigint;
+    size: string;
+    price: bigint;
+    protein: bigint;
 }
 export enum DeliveryStatus {
     preparing = "preparing",
@@ -190,10 +197,6 @@ export enum OrderStatus {
     pending = "pending",
     delivered = "delivered",
     confirmed = "confirmed"
-}
-export enum PlanType {
-    monthly = "monthly",
-    weekly = "weekly"
 }
 export enum ReviewStatus {
     pending = "pending",
@@ -227,7 +230,7 @@ export interface backendInterface {
     createSubscriptionPlan(name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<bigint>;
     deleteCoupon(id: bigint): Promise<void>;
     deleteMenuItem(id: bigint): Promise<void>;
-    deleteReview(id: string): Promise<Result_1>;
+    deleteReview(id: string): Promise<Result_3>;
     deleteRider(id: bigint): Promise<void>;
     deleteSubscriptionPlan(id: bigint): Promise<void>;
     deleteUser(user: Principal): Promise<void>;
@@ -258,7 +261,7 @@ export interface backendInterface {
     hasAdminBeenClaimed(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     linkIngredientToMenuItem(menuItemName: string, ingredientId: bigint, quantityPerOrder: bigint): Promise<void>;
-    placeOrder(items: Array<OrderItem>, totalAmount: bigint, deliveryType: DeliveryType): Promise<void>;
+    placeOrder(items: Array<OrderItem>, totalAmount: bigint, deliveryType: DeliveryType): Promise<Result_2>;
     registerUser(profile: UserProfile): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     saveUserProfile(profile: UserProfile): Promise<void>;
@@ -270,10 +273,10 @@ export interface backendInterface {
     updateIngredientStock(id: bigint, newQuantity: bigint): Promise<void>;
     updateLeadStatus(id: bigint, status: LeadStatus): Promise<boolean>;
     updateMenuItem(id: bigint, name: string, price: bigint, calories: bigint, protein: bigint, ingredients: Array<string>, tags: Array<string>, sizes: Array<BowlSize>, linkedIngredients: Array<LinkedIngredient>, imageUrl: string): Promise<void>;
+    updateOrder(orderId: bigint, deliveryStatus: DeliveryStatus | null, assignedRiderId: bigint | null, deliveryNotes: string | null): Promise<Result_1>;
     updateOrderDeliveryNotes(orderId: bigint, notes: string): Promise<void>;
     updateOrderDeliveryStatus(orderId: bigint, deliveryStatus: DeliveryStatus): Promise<void>;
     updateOrderStatus(orderId: bigint, status: OrderStatus): Promise<void>;
-    updateOrder(orderId: bigint, deliveryStatus: DeliveryStatus | null, assignedRiderId: bigint | null, deliveryNotes: string | null): Promise<Result_Order>;
     updateReviewStatus(id: string, status: ReviewStatus): Promise<Result>;
     updateRider(id: bigint, name: string, mobile: string, area: string): Promise<void>;
     updateSubscriptionPlan(id: bigint, name: string, totalMeals: bigint, price: bigint, validityDays: bigint, description: string): Promise<void>;
@@ -281,5 +284,4 @@ export interface backendInterface {
     updateUserProfile(profile: UserProfile): Promise<void>;
     updateUserProfileByAdmin(user: Principal, profile: UserProfile): Promise<void>;
     validateCoupon(code: string): Promise<Coupon>;
-    assignOrderRider(orderId: bigint, riderId: bigint): Promise<void>;
 }

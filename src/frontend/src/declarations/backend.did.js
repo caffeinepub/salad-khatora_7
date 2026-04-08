@@ -8,6 +8,16 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const BowlSize = IDL.Record({
+  'calories' : IDL.Nat,
+  'size' : IDL.Text,
+  'price' : IDL.Nat,
+  'protein' : IDL.Nat,
+});
+export const LinkedIngredient = IDL.Record({
+  'quantityGrams' : IDL.Nat,
+  'ingredientId' : IDL.Nat,
+});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
@@ -32,11 +42,7 @@ export const Review = IDL.Record({
   'rating' : IDL.Nat,
 });
 export const Result = IDL.Variant({ 'ok' : Review, 'err' : IDL.Text });
-export const PlanType = IDL.Variant({
-  'monthly' : IDL.Null,
-  'weekly' : IDL.Null,
-});
-export const Result_1 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
+export const Result_3 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
 export const Coupon = IDL.Record({
   'id' : IDL.Nat,
   'discountValue' : IDL.Nat,
@@ -68,28 +74,18 @@ export const Ingredient = IDL.Record({
   'name' : IDL.Text,
   'unit' : IDL.Text,
 });
-export const BowlSize = IDL.Record({
-  'size' : IDL.Text,
-  'price' : IDL.Nat,
-  'calories' : IDL.Nat,
-  'protein' : IDL.Nat,
-});
-export const LinkedIngredient = IDL.Record({
-  'ingredientId' : IDL.Nat,
-  'quantityGrams' : IDL.Nat,
-});
 export const MenuItem = IDL.Record({
   'id' : IDL.Nat,
   'calories' : IDL.Nat,
   'name' : IDL.Text,
   'tags' : IDL.Vec(IDL.Text),
+  'linkedIngredients' : IDL.Vec(LinkedIngredient),
+  'sizes' : IDL.Vec(BowlSize),
   'enabled' : IDL.Bool,
+  'imageUrl' : IDL.Text,
   'price' : IDL.Nat,
   'ingredients' : IDL.Vec(IDL.Text),
   'protein' : IDL.Nat,
-  'sizes' : IDL.Vec(BowlSize),
-  'linkedIngredients' : IDL.Vec(LinkedIngredient),
-  'imageUrl' : IDL.Text,
 });
 export const OrderStatus = IDL.Variant({
   'pending' : IDL.Null,
@@ -104,39 +100,38 @@ export const OrderItem = IDL.Record({
 export const Order = IDL.Record({
   'id' : IDL.Nat,
   'status' : OrderStatus,
-  'deliveryStatus' : IDL.Variant({ 'preparing' : IDL.Null, 'outForDelivery' : IDL.Null, 'delivered' : IDL.Null, 'ready' : IDL.Null }),
-  'assignedRiderId' : IDL.Opt(IDL.Nat),
-  'deliveryTime' : IDL.Opt(Time),
-  'deliveryNotes' : IDL.Text,
   'createdAt' : Time,
   'user' : IDL.Principal,
+  'deliveryNotes' : IDL.Text,
+  'deliveryStatus' : DeliveryStatus,
+  'assignedRiderId' : IDL.Opt(IDL.Nat),
+  'deliveryTime' : IDL.Opt(Time),
   'deliveryType' : IDL.Variant({ 'scheduled' : Time, 'instant' : IDL.Null }),
   'totalAmount' : IDL.Nat,
   'items' : IDL.Vec(OrderItem),
 });
-export const Result_Order = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
 export const Rider = IDL.Record({
   'id' : IDL.Nat,
   'area' : IDL.Text,
   'name' : IDL.Text,
   'mobile' : IDL.Text,
 });
+export const SubscriptionPlan = IDL.Record({
+  'id' : IDL.Nat,
+  'totalMeals' : IDL.Nat,
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'validityDays' : IDL.Nat,
+  'price' : IDL.Nat,
+});
 export const Subscription = IDL.Record({
   'status' : IDL.Variant({ 'active' : IDL.Null, 'expired' : IDL.Null }),
   'saladsRemaining' : IDL.Nat,
-  'user' : IDL.Principal,
   'planId' : IDL.Nat,
+  'expiryDate' : Time,
+  'user' : IDL.Principal,
   'planName' : IDL.Text,
   'startDate' : Time,
-  'expiryDate' : Time,
-});
-export const SubscriptionPlan = IDL.Record({
-  'id' : IDL.Nat,
-  'name' : IDL.Text,
-  'totalMeals' : IDL.Nat,
-  'price' : IDL.Nat,
-  'validityDays' : IDL.Nat,
-  'description' : IDL.Text,
 });
 export const UserProfile = IDL.Record({
   'age' : IDL.Nat,
@@ -150,7 +145,7 @@ export const UserProfile = IDL.Record({
   'mobile' : IDL.Text,
 });
 export const LeadStatus = IDL.Variant({
-  'new_' : IDL.Null,
+  'new' : IDL.Null,
   'contacted' : IDL.Null,
   'converted' : IDL.Null,
 });
@@ -179,9 +174,11 @@ export const DeliveryType = IDL.Variant({
   'scheduled' : Time,
   'instant' : IDL.Null,
 });
+export const Result_2 = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
+export const Result_1 = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
 
 export const idlService = IDL.Service({
-  '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  '_initializeAccessControl' : IDL.Func([], [], []),
   'addIngredient' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Nat, IDL.Nat],
       [IDL.Nat],
@@ -205,6 +202,7 @@ export const idlService = IDL.Service({
   'addRider' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Nat], []),
   'addUserNote' : IDL.Func([IDL.Principal, IDL.Text], [IDL.Nat], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'assignRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'bulkAssignRider' : IDL.Func([IDL.Vec(IDL.Nat), IDL.Nat], [], []),
   'claimFirstAdminRole' : IDL.Func([], [], []),
@@ -221,10 +219,16 @@ export const idlService = IDL.Service({
   'createLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
   'createReview' : IDL.Func([IDL.Text, IDL.Nat, IDL.Text], [Result], []),
   'createSubscription' : IDL.Func([IDL.Nat], [], []),
+  'createSubscriptionPlan' : IDL.Func(
+      [IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+      [IDL.Nat],
+      [],
+    ),
   'deleteCoupon' : IDL.Func([IDL.Nat], [], []),
   'deleteMenuItem' : IDL.Func([IDL.Nat], [], []),
-  'deleteReview' : IDL.Func([IDL.Text], [Result_1], []),
+  'deleteReview' : IDL.Func([IDL.Text], [Result_3], []),
   'deleteRider' : IDL.Func([IDL.Nat], [], []),
+  'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
   'deleteUser' : IDL.Func([IDL.Principal], [], []),
   'deleteUserNote' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'getAllCoupons' : IDL.Func([], [IDL.Vec(Coupon)], ['query']),
@@ -234,11 +238,12 @@ export const idlService = IDL.Service({
   'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
   'getAllRiders' : IDL.Func([], [IDL.Vec(Rider)], ['query']),
+  'getAllSubscriptionPlans' : IDL.Func(
+      [],
+      [IDL.Vec(SubscriptionPlan)],
+      ['query'],
+    ),
   'getAllSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], ['query']),
-  'getAllSubscriptionPlans' : IDL.Func([], [IDL.Vec(SubscriptionPlan)], ['query']),
-  'createSubscriptionPlan' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [IDL.Nat], []),
-  'updateSubscriptionPlan' : IDL.Func([IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [], []),
-  'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
   'getAllUsers' : IDL.Func(
       [],
       [
@@ -271,7 +276,7 @@ export const idlService = IDL.Service({
   'linkIngredientToMenuItem' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat], [], []),
   'placeOrder' : IDL.Func(
       [IDL.Vec(OrderItem), IDL.Nat, DeliveryType],
-      [],
+      [Result_2],
       [],
     ),
   'registerUser' : IDL.Func([UserProfile], [], []),
@@ -300,13 +305,21 @@ export const idlService = IDL.Service({
       [],
       [],
     ),
-  'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
-  'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
-  'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+  'updateOrder' : IDL.Func(
+      [IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)],
+      [Result_1],
+      [],
+    ),
   'updateOrderDeliveryNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
-  'updateOrder' : IDL.Func([IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)], [Result_Order], []),
+  'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
+  'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
   'updateReviewStatus' : IDL.Func([IDL.Text, ReviewStatus], [Result], []),
   'updateRider' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text, IDL.Text], [], []),
+  'updateSubscriptionPlan' : IDL.Func(
+      [IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+      [],
+      [],
+    ),
   'updateSubscriptionStatus' : IDL.Func(
       [
         IDL.Principal,
@@ -323,6 +336,16 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const BowlSize = IDL.Record({
+    'calories' : IDL.Nat,
+    'size' : IDL.Text,
+    'price' : IDL.Nat,
+    'protein' : IDL.Nat,
+  });
+  const LinkedIngredient = IDL.Record({
+    'quantityGrams' : IDL.Nat,
+    'ingredientId' : IDL.Nat,
+  });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
@@ -347,7 +370,7 @@ export const idlFactory = ({ IDL }) => {
     'rating' : IDL.Nat,
   });
   const Result = IDL.Variant({ 'ok' : Review, 'err' : IDL.Text });
-  const Result_1 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
+  const Result_3 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
   const Coupon = IDL.Record({
     'id' : IDL.Nat,
     'discountValue' : IDL.Nat,
@@ -379,28 +402,18 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'unit' : IDL.Text,
   });
-  const BowlSize = IDL.Record({
-    'size' : IDL.Text,
-    'price' : IDL.Nat,
-    'calories' : IDL.Nat,
-    'protein' : IDL.Nat,
-  });
-  const LinkedIngredient = IDL.Record({
-    'ingredientId' : IDL.Nat,
-    'quantityGrams' : IDL.Nat,
-  });
   const MenuItem = IDL.Record({
     'id' : IDL.Nat,
     'calories' : IDL.Nat,
     'name' : IDL.Text,
     'tags' : IDL.Vec(IDL.Text),
+    'linkedIngredients' : IDL.Vec(LinkedIngredient),
+    'sizes' : IDL.Vec(BowlSize),
     'enabled' : IDL.Bool,
+    'imageUrl' : IDL.Text,
     'price' : IDL.Nat,
     'ingredients' : IDL.Vec(IDL.Text),
     'protein' : IDL.Nat,
-    'sizes' : IDL.Vec(BowlSize),
-    'linkedIngredients' : IDL.Vec(LinkedIngredient),
-    'imageUrl' : IDL.Text,
   });
   const OrderStatus = IDL.Variant({
     'pending' : IDL.Null,
@@ -415,41 +428,40 @@ export const idlFactory = ({ IDL }) => {
   const Order = IDL.Record({
     'id' : IDL.Nat,
     'status' : OrderStatus,
-    'deliveryStatus' : IDL.Variant({ 'preparing' : IDL.Null, 'outForDelivery' : IDL.Null, 'delivered' : IDL.Null, 'ready' : IDL.Null }),
-    'assignedRiderId' : IDL.Opt(IDL.Nat),
-    'deliveryTime' : IDL.Opt(Time),
-    'deliveryNotes' : IDL.Text,
     'createdAt' : Time,
     'user' : IDL.Principal,
+    'deliveryNotes' : IDL.Text,
+    'deliveryStatus' : DeliveryStatus,
+    'assignedRiderId' : IDL.Opt(IDL.Nat),
+    'deliveryTime' : IDL.Opt(Time),
     'deliveryType' : IDL.Variant({ 'scheduled' : Time, 'instant' : IDL.Null }),
     'totalAmount' : IDL.Nat,
     'items' : IDL.Vec(OrderItem),
   });
-  const Result_Order = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
   const Rider = IDL.Record({
     'id' : IDL.Nat,
     'area' : IDL.Text,
     'name' : IDL.Text,
     'mobile' : IDL.Text,
   });
+  const SubscriptionPlan = IDL.Record({
+    'id' : IDL.Nat,
+    'totalMeals' : IDL.Nat,
+    'name' : IDL.Text,
+    'description' : IDL.Text,
+    'validityDays' : IDL.Nat,
+    'price' : IDL.Nat,
+  });
   const Subscription = IDL.Record({
     'status' : IDL.Variant({ 'active' : IDL.Null, 'expired' : IDL.Null }),
     'saladsRemaining' : IDL.Nat,
-    'user' : IDL.Principal,
     'planId' : IDL.Nat,
+    'expiryDate' : Time,
+    'user' : IDL.Principal,
     'planName' : IDL.Text,
     'startDate' : Time,
-    'expiryDate' : Time,
   });
-  const SubscriptionPlan = IDL.Record({
-    'id' : IDL.Nat,
-    'name' : IDL.Text,
-    'totalMeals' : IDL.Nat,
-    'price' : IDL.Nat,
-    'validityDays' : IDL.Nat,
-    'description' : IDL.Text,
-  });
-    const UserProfile = IDL.Record({
+  const UserProfile = IDL.Record({
     'age' : IDL.Nat,
     'heightCm' : IDL.Nat,
     'dietaryPreferences' : IDL.Vec(IDL.Text),
@@ -461,7 +473,7 @@ export const idlFactory = ({ IDL }) => {
     'mobile' : IDL.Text,
   });
   const LeadStatus = IDL.Variant({
-    'new_' : IDL.Null,
+    'new' : IDL.Null,
     'contacted' : IDL.Null,
     'converted' : IDL.Null,
   });
@@ -490,9 +502,11 @@ export const idlFactory = ({ IDL }) => {
     'scheduled' : Time,
     'instant' : IDL.Null,
   });
+  const Result_2 = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
+  const Result_1 = IDL.Variant({ 'ok' : Order, 'err' : IDL.Text });
   
   return IDL.Service({
-    '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    '_initializeAccessControl' : IDL.Func([], [], []),
     'addIngredient' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Nat, IDL.Nat],
         [IDL.Nat],
@@ -516,6 +530,7 @@ export const idlFactory = ({ IDL }) => {
     'addRider' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Nat], []),
     'addUserNote' : IDL.Func([IDL.Principal, IDL.Text], [IDL.Nat], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'assignRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'bulkAssignRider' : IDL.Func([IDL.Vec(IDL.Nat), IDL.Nat], [], []),
     'claimFirstAdminRole' : IDL.Func([], [], []),
@@ -532,10 +547,16 @@ export const idlFactory = ({ IDL }) => {
     'createLead' : IDL.Func([IDL.Text, IDL.Text], [IDL.Nat], []),
     'createReview' : IDL.Func([IDL.Text, IDL.Nat, IDL.Text], [Result], []),
     'createSubscription' : IDL.Func([IDL.Nat], [], []),
+    'createSubscriptionPlan' : IDL.Func(
+        [IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+        [IDL.Nat],
+        [],
+      ),
     'deleteCoupon' : IDL.Func([IDL.Nat], [], []),
     'deleteMenuItem' : IDL.Func([IDL.Nat], [], []),
-    'deleteReview' : IDL.Func([IDL.Text], [Result_1], []),
+    'deleteReview' : IDL.Func([IDL.Text], [Result_3], []),
     'deleteRider' : IDL.Func([IDL.Nat], [], []),
+    'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
     'deleteUser' : IDL.Func([IDL.Principal], [], []),
     'deleteUserNote' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'getAllCoupons' : IDL.Func([], [IDL.Vec(Coupon)], ['query']),
@@ -545,11 +566,12 @@ export const idlFactory = ({ IDL }) => {
     'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getAllReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
     'getAllRiders' : IDL.Func([], [IDL.Vec(Rider)], ['query']),
+    'getAllSubscriptionPlans' : IDL.Func(
+        [],
+        [IDL.Vec(SubscriptionPlan)],
+        ['query'],
+      ),
     'getAllSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], ['query']),
-    'getAllSubscriptionPlans' : IDL.Func([], [IDL.Vec(SubscriptionPlan)], ['query']),
-    'createSubscriptionPlan' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [IDL.Nat], []),
-    'updateSubscriptionPlan' : IDL.Func([IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text], [], []),
-    'deleteSubscriptionPlan' : IDL.Func([IDL.Nat], [], []),
     'getAllUsers' : IDL.Func(
         [],
         [
@@ -582,7 +604,7 @@ export const idlFactory = ({ IDL }) => {
     'linkIngredientToMenuItem' : IDL.Func([IDL.Text, IDL.Nat, IDL.Nat], [], []),
     'placeOrder' : IDL.Func(
         [IDL.Vec(OrderItem), IDL.Nat, DeliveryType],
-        [],
+        [Result_2],
         [],
       ),
     'registerUser' : IDL.Func([UserProfile], [], []),
@@ -611,13 +633,21 @@ export const idlFactory = ({ IDL }) => {
         [],
         [],
       ),
+    'updateOrder' : IDL.Func(
+        [IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)],
+        [Result_1],
+        [],
+      ),
+    'updateOrderDeliveryNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+    'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
     'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
-  'updateOrderDeliveryStatus' : IDL.Func([IDL.Nat, DeliveryStatus], [], []),
-  'assignOrderRider' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
-  'updateOrderDeliveryNotes' : IDL.Func([IDL.Nat, IDL.Text], [], []),
-  'updateOrder' : IDL.Func([IDL.Nat, IDL.Opt(DeliveryStatus), IDL.Opt(IDL.Nat), IDL.Opt(IDL.Text)], [Result_Order], []),
     'updateReviewStatus' : IDL.Func([IDL.Text, ReviewStatus], [Result], []),
     'updateRider' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text, IDL.Text], [], []),
+    'updateSubscriptionPlan' : IDL.Func(
+        [IDL.Nat, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+        [],
+        [],
+      ),
     'updateSubscriptionStatus' : IDL.Func(
         [
           IDL.Principal,

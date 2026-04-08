@@ -1,10 +1,10 @@
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useRef } from "react";
 import type { UserProfile } from "./backend";
 import { useActor } from "./hooks/useActor";
 import type { ConnectionStatus } from "./hooks/useConnectionManager";
 import { useConnectionManager } from "./hooks/useConnectionManager";
-import { useInternetIdentity } from "./hooks/useInternetIdentity";
 
 interface AuthContextValue {
   login: () => void;

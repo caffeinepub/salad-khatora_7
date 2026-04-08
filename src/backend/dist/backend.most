@@ -1,0 +1,306 @@
+// Version: 1.0.0
+type BowlSize__776339168 =
+  {calories : Nat; price : Nat; protein : Nat; size : Text};
+type Coupon__100505319 =
+  {
+    code : Text;
+    discountType : DiscountType__855484923;
+    discountValue : Nat;
+    expiryDate : Time__900049286;
+    id : Nat;
+    isActive : Bool
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type DeliveryRecord__732126345 =
+  {
+    address : Text;
+    customerName : Text;
+    deliveryTime : Time__900049286;
+    id : Nat;
+    notes : Text;
+    orderId : Nat;
+    riderId : ?Nat;
+    status : DeliveryStatus__221673340
+  };
+type DeliveryStatus__221673340 =
+  {#delivered; #outForDelivery; #preparing; #ready};
+type DiscountType__855484923 = {#flat; #percentage};
+type Ingredient__830977812 =
+  {
+    id : Nat;
+    lowStockThreshold : Nat;
+    name : Text;
+    quantityInStock : Nat;
+    unit : Text
+  };
+type Int__270357528 = Int__616954475;
+type Int__616954475 = Int;
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type LeadStatus__870920645 = {#contacted; #converted; #new_};
+type Lead__21276013 =
+  {
+    date : Time__900049286;
+    id : Nat;
+    mobile : Text;
+    name : Text;
+    status : LeadStatus__870920645
+  };
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type LinkedIngredient__934859823 = {ingredientId : Nat; quantityGrams : Nat};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type MenuItemIngredient__472168242 =
+  {ingredientId : Nat; menuItemName : Text; quantityPerOrder : Nat};
+type MenuItemV1__8986257 =
+  {
+    calories : Nat;
+    enabled : Bool;
+    id : Nat;
+    ingredients : [Text];
+    name : Text;
+    price : Nat;
+    protein : Nat
+  };
+type MenuItemV2__145975937 =
+  {
+    calories : Nat;
+    enabled : Bool;
+    id : Nat;
+    ingredients : [Text];
+    name : Text;
+    price : Nat;
+    protein : Nat;
+    tags : [Text]
+  };
+type MenuItemV3__156968407 =
+  {
+    calories : Nat;
+    enabled : Bool;
+    id : Nat;
+    ingredients : [Text];
+    linkedIngredients : [LinkedIngredient__934859823];
+    name : Text;
+    price : Nat;
+    protein : Nat;
+    sizes : [BowlSize__776339168];
+    tags : [Text]
+  };
+type MenuItem__727296599 =
+  {
+    calories : Nat;
+    enabled : Bool;
+    id : Nat;
+    imageUrl : Text;
+    ingredients : [Text];
+    linkedIngredients : [LinkedIngredient__934859823];
+    name : Text;
+    price : Nat;
+    protein : Nat;
+    sizes : [BowlSize__776339168];
+    tags : [Text]
+  };
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type OrderItem__592186033 = {price : Nat; quantity : Nat; saladName : Text};
+type OrderStatus__838108808 = {#confirmed; #delivered; #pending};
+type OrderV1__793055768 =
+  {
+    createdAt : Time__900049286;
+    deliveryType : {#instant; #scheduled : Time__900049286};
+    id : Nat;
+    items : [OrderItem__592186033];
+    status : OrderStatus__838108808;
+    totalAmount : Nat;
+    user : Principal
+  };
+type Order__762448211 =
+  {
+    assignedRiderId : ?Nat;
+    createdAt : Time__900049286;
+    deliveryNotes : Text;
+    deliveryStatus : DeliveryStatus__221673340;
+    deliveryTime : ?Time__900049286;
+    deliveryType : {#instant; #scheduled : Time__900049286};
+    id : Nat;
+    items : [OrderItem__592186033];
+    status : OrderStatus__838108808;
+    totalAmount : Nat;
+    user : Principal
+  };
+type ReviewStatus__8880597 = {#approved; #pending; #rejected};
+type Review__422344017 =
+  {
+    comment : Text;
+    date : Int;
+    id : Text;
+    rating : Nat;
+    status : ReviewStatus__8880597;
+    userName : Text
+  };
+type Rider__74180627 = {area : Text; id : Nat; mobile : Text; name : Text};
+type SubscriptionPlan__552945260 =
+  {
+    description : Text;
+    id : Nat;
+    name : Text;
+    price : Nat;
+    totalMeals : Nat;
+    validityDays : Nat
+  };
+type SubscriptionV1__992540961 =
+  {
+    planType : {#monthly; #weekly};
+    saladsRemaining : Nat;
+    startDate : Time__900049286;
+    status : {#active; #expired};
+    user : Principal
+  };
+type Subscription__231062474 =
+  {
+    expiryDate : Time__900049286;
+    planId : Nat;
+    planName : Text;
+    saladsRemaining : Nat;
+    startDate : Time__900049286;
+    status : {#active; #expired};
+    user : Principal
+  };
+type Time__796480547 = Int__270357528;
+type Time__900049286 = Time__796480547;
+type UserMeta__444041625 = {isVip : Bool; notes : [UserNote__578990888]};
+type UserNote__578990888 =
+  {createdAt : Time__900049286; id : Nat; text : Text};
+type UserProfile__491224006 =
+  {
+    address : Text;
+    age : Nat;
+    dietaryPreferences : [Text];
+    dietaryRestrictions : [Text];
+    email : Text;
+    heightCm : Nat;
+    mobile : Text;
+    name : Text;
+    weightKg : Nat
+  };
+type UserRole__1054455867 = {#admin; #guest; #user};
+actor {
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__1054455867>
+    };
+  stable coupons :
+    {
+      var root : Node__46230540<Nat, Coupon__100505319>;
+      var size : Nat__490723111
+    };
+  stable deliveryRecords :
+    {
+      var root : Node__46230540<Nat, DeliveryRecord__732126345>;
+      var size : Nat__490723111
+    };
+  stable var firstAdminClaimed : Bool;
+  stable ingredients :
+    {
+      var root : Node__46230540<Nat, Ingredient__830977812>;
+      var size : Nat__490723111
+    };
+  stable leads :
+    {
+      var root : Node__46230540<Nat, Lead__21276013>;
+      var size : Nat__490723111
+    };
+  stable menuItemIngredients :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?MenuItemIngredient__472168242]];
+      var elementIndex : Nat__490723111
+    };
+  stable menuItems :
+    {
+      var root : Node__46230540<Nat, MenuItemV1__8986257>;
+      var size : Nat__490723111
+    };
+  stable var menuItemsMigrated : Bool;
+  stable menuItemsV2 :
+    {
+      var root : Node__46230540<Nat, MenuItemV2__145975937>;
+      var size : Nat__490723111
+    };
+  stable menuItemsV3 :
+    {
+      var root : Node__46230540<Nat, MenuItemV3__156968407>;
+      var size : Nat__490723111
+    };
+  stable var menuItemsV3Migrated : Bool;
+  stable menuItemsV4 :
+    {
+      var root : Node__46230540<Nat, MenuItem__727296599>;
+      var size : Nat__490723111
+    };
+  stable var menuItemsV4Migrated : Bool;
+  stable var nextCouponId : Nat;
+  stable var nextDeliveryId : Nat;
+  stable var nextIngredientId : Nat;
+  stable var nextLeadId : Nat;
+  stable var nextMenuItemId : Nat;
+  stable var nextNoteId : Nat;
+  stable var nextOrderId : Nat;
+  stable var nextPlanId : Nat;
+  stable var nextRiderId : Nat;
+  stable orders :
+    {
+      var root : Node__46230540<Nat, OrderV1__793055768>;
+      var size : Nat__490723111
+    };
+  stable ordersV2 :
+    {
+      var root : Node__46230540<Nat, Order__762448211>;
+      var size : Nat__490723111
+    };
+  stable var ordersV2Migrated : Bool;
+  stable var plansSeeded : Bool;
+  stable var reviewIdCounter : Nat;
+  stable reviews :
+    {
+      var root : Node__46230540<Text, Review__422344017>;
+      var size : Nat__490723111
+    };
+  stable riders :
+    {
+      var root : Node__46230540<Nat, Rider__74180627>;
+      var size : Nat__490723111
+    };
+  stable subscriptionPlans :
+    {
+      var root : Node__46230540<Nat, SubscriptionPlan__552945260>;
+      var size : Nat__490723111
+    };
+  stable subscriptions :
+    {
+      var root : Node__46230540<Principal, SubscriptionV1__992540961>;
+      var size : Nat__490723111
+    };
+  stable var subscriptionsMigrated : Bool;
+  stable subscriptionsV2 :
+    {
+      var root : Node__46230540<Principal, Subscription__231062474>;
+      var size : Nat__490723111
+    };
+  stable userMeta :
+    {
+      var root : Node__46230540<Principal, UserMeta__444041625>;
+      var size : Nat__490723111
+    };
+  stable userProfiles :
+    {
+      var root : Node__46230540<Principal, UserProfile__491224006>;
+      var size : Nat__490723111
+    }
+};

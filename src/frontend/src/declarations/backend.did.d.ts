@@ -11,14 +11,10 @@ import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
 export interface BowlSize {
+  'calories' : bigint,
   'size' : string,
   'price' : bigint,
-  'calories' : bigint,
   'protein' : bigint,
-}
-export interface LinkedIngredient {
-  'ingredientId' : bigint,
-  'quantityGrams' : bigint,
 }
 export interface Coupon {
   'id' : bigint,
@@ -60,21 +56,25 @@ export interface Lead {
   'name' : string,
   'mobile' : string,
 }
-export type LeadStatus = { 'new_' : null } |
+export type LeadStatus = { 'new' : null } |
   { 'contacted' : null } |
   { 'converted' : null };
+export interface LinkedIngredient {
+  'quantityGrams' : bigint,
+  'ingredientId' : bigint,
+}
 export interface MenuItem {
   'id' : bigint,
   'calories' : bigint,
   'name' : string,
   'tags' : Array<string>,
+  'linkedIngredients' : Array<LinkedIngredient>,
+  'sizes' : Array<BowlSize>,
   'enabled' : boolean,
+  'imageUrl' : string,
   'price' : bigint,
   'ingredients' : Array<string>,
   'protein' : bigint,
-  'sizes' : Array<BowlSize>,
-  'linkedIngredients' : Array<LinkedIngredient>,
-  'imageUrl' : string,
 }
 export interface MenuItemIngredient {
   'menuItemName' : string,
@@ -86,6 +86,10 @@ export interface Order {
   'status' : OrderStatus,
   'createdAt' : Time,
   'user' : Principal,
+  'deliveryNotes' : string,
+  'deliveryStatus' : DeliveryStatus,
+  'assignedRiderId' : [] | [bigint],
+  'deliveryTime' : [] | [Time],
   'deliveryType' : { 'scheduled' : Time } |
     { 'instant' : null },
   'totalAmount' : bigint,
@@ -99,13 +103,13 @@ export interface OrderItem {
 export type OrderStatus = { 'pending' : null } |
   { 'delivered' : null } |
   { 'confirmed' : null };
-export type PlanType = { 'monthly' : null } |
-  { 'weekly' : null };
 export type Result = { 'ok' : Review } |
   { 'err' : string };
-export type Result_1 = { 'ok' : null } |
+export type Result_1 = { 'ok' : Order } |
   { 'err' : string };
-export type Result_Order = { 'ok' : Order } |
+export type Result_2 = { 'ok' : bigint } |
+  { 'err' : string };
+export type Result_3 = { 'ok' : null } |
   { 'err' : string };
 export interface Review {
   'id' : string,
@@ -128,19 +132,19 @@ export interface Subscription {
   'status' : { 'active' : null } |
     { 'expired' : null },
   'saladsRemaining' : bigint,
-  'user' : Principal,
   'planId' : bigint,
+  'expiryDate' : Time,
+  'user' : Principal,
   'planName' : string,
   'startDate' : Time,
-  'expiryDate' : Time,
 }
 export interface SubscriptionPlan {
   'id' : bigint,
-  'name' : string,
   'totalMeals' : bigint,
-  'price' : bigint,
-  'validityDays' : bigint,
+  'name' : string,
   'description' : string,
+  'validityDays' : bigint,
+  'price' : bigint,
 }
 export type Time = bigint;
 export interface UserMeta { 'notes' : Array<UserNote>, 'isVip' : boolean }
@@ -160,15 +164,26 @@ export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
 export interface _SERVICE {
-  '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  '_initializeAccessControl' : ActorMethod<[], undefined>,
   'addIngredient' : ActorMethod<[string, string, bigint, bigint], bigint>,
   'addMenuItem' : ActorMethod<
-    [string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>, string],
+    [
+      string,
+      bigint,
+      bigint,
+      bigint,
+      Array<string>,
+      Array<string>,
+      Array<BowlSize>,
+      Array<LinkedIngredient>,
+      string,
+    ],
     bigint
   >,
   'addRider' : ActorMethod<[string, string, string], bigint>,
   'addUserNote' : ActorMethod<[Principal, string], bigint>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'assignOrderRider' : ActorMethod<[bigint, bigint], undefined>,
   'assignRider' : ActorMethod<[bigint, bigint], undefined>,
   'bulkAssignRider' : ActorMethod<[Array<bigint>, bigint], undefined>,
   'claimFirstAdminRole' : ActorMethod<[], undefined>,
@@ -180,10 +195,15 @@ export interface _SERVICE {
   'createLead' : ActorMethod<[string, string], bigint>,
   'createReview' : ActorMethod<[string, bigint, string], Result>,
   'createSubscription' : ActorMethod<[bigint], undefined>,
+  'createSubscriptionPlan' : ActorMethod<
+    [string, bigint, bigint, bigint, string],
+    bigint
+  >,
   'deleteCoupon' : ActorMethod<[bigint], undefined>,
   'deleteMenuItem' : ActorMethod<[bigint], undefined>,
-  'deleteReview' : ActorMethod<[string], Result_1>,
+  'deleteReview' : ActorMethod<[string], Result_3>,
   'deleteRider' : ActorMethod<[bigint], undefined>,
+  'deleteSubscriptionPlan' : ActorMethod<[bigint], undefined>,
   'deleteUser' : ActorMethod<[Principal], undefined>,
   'deleteUserNote' : ActorMethod<[Principal, bigint], undefined>,
   'getAllCoupons' : ActorMethod<[], Array<Coupon>>,
@@ -193,11 +213,8 @@ export interface _SERVICE {
   'getAllOrders' : ActorMethod<[], Array<Order>>,
   'getAllReviews' : ActorMethod<[], Array<Review>>,
   'getAllRiders' : ActorMethod<[], Array<Rider>>,
-  'getAllSubscriptions' : ActorMethod<[], Array<Subscription>>,
   'getAllSubscriptionPlans' : ActorMethod<[], Array<SubscriptionPlan>>,
-  'createSubscriptionPlan' : ActorMethod<[string, bigint, bigint, bigint, string], bigint>,
-  'updateSubscriptionPlan' : ActorMethod<[bigint, string, bigint, bigint, bigint, string], undefined>,
-  'deleteSubscriptionPlan' : ActorMethod<[bigint], undefined>,
+  'getAllSubscriptions' : ActorMethod<[], Array<Subscription>>,
   'getAllUsers' : ActorMethod<
     [],
     Array<{ 'principal' : Principal, 'profile' : UserProfile }>
@@ -217,7 +234,7 @@ export interface _SERVICE {
   'linkIngredientToMenuItem' : ActorMethod<[string, bigint, bigint], undefined>,
   'placeOrder' : ActorMethod<
     [Array<OrderItem>, bigint, DeliveryType],
-    undefined
+    Result_2
   >,
   'registerUser' : ActorMethod<[UserProfile], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
@@ -230,16 +247,36 @@ export interface _SERVICE {
   'updateIngredientStock' : ActorMethod<[bigint, bigint], undefined>,
   'updateLeadStatus' : ActorMethod<[bigint, LeadStatus], boolean>,
   'updateMenuItem' : ActorMethod<
-    [bigint, string, bigint, bigint, bigint, Array<string>, Array<string>, Array<BowlSize>, Array<LinkedIngredient>, string],
+    [
+      bigint,
+      string,
+      bigint,
+      bigint,
+      bigint,
+      Array<string>,
+      Array<string>,
+      Array<BowlSize>,
+      Array<LinkedIngredient>,
+      string,
+    ],
+    undefined
+  >,
+  'updateOrder' : ActorMethod<
+    [bigint, [] | [DeliveryStatus], [] | [bigint], [] | [string]],
+    Result_1
+  >,
+  'updateOrderDeliveryNotes' : ActorMethod<[bigint, string], undefined>,
+  'updateOrderDeliveryStatus' : ActorMethod<
+    [bigint, DeliveryStatus],
     undefined
   >,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
-  'updateOrderDeliveryStatus' : ActorMethod<[bigint, DeliveryStatus], undefined>,
-  'assignOrderRider' : ActorMethod<[bigint, bigint], undefined>,
-  'updateOrderDeliveryNotes' : ActorMethod<[bigint, string], undefined>,
-  'updateOrder' : ActorMethod<[bigint, [] | [DeliveryStatus], [] | [bigint], [] | [string]], Result_Order>,
   'updateReviewStatus' : ActorMethod<[string, ReviewStatus], Result>,
   'updateRider' : ActorMethod<[bigint, string, string, string], undefined>,
+  'updateSubscriptionPlan' : ActorMethod<
+    [bigint, string, bigint, bigint, bigint, string],
+    undefined
+  >,
   'updateSubscriptionStatus' : ActorMethod<
     [Principal, { 'active' : null } | { 'expired' : null }],
     undefined

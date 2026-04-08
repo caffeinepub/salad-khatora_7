@@ -1,0 +1,307 @@
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserProfile = 
+ record {
+   address: text;
+   age: nat;
+   dietaryPreferences: vec text;
+   dietaryRestrictions: vec text;
+   email: text;
+   heightCm: nat;
+   mobile: text;
+   name: text;
+   weightKg: nat;
+ };
+type UserNote = 
+ record {
+   createdAt: Time;
+   id: nat;
+   "text": text;
+ };
+type UserMeta = 
+ record {
+   isVip: bool;
+   notes: vec UserNote;
+ };
+type Time = int;
+type SubscriptionPlan = 
+ record {
+   description: text;
+   id: nat;
+   name: text;
+   price: nat;
+   totalMeals: nat;
+   validityDays: nat;
+ };
+type Subscription = 
+ record {
+   expiryDate: Time;
+   planId: nat;
+   planName: text;
+   saladsRemaining: nat;
+   startDate: Time;
+   status: variant {
+             active;
+             expired;
+           };
+   user: principal;
+ };
+type Rider = 
+ record {
+   area: text;
+   id: nat;
+   mobile: text;
+   name: text;
+ };
+type ReviewStatus = 
+ variant {
+   approved;
+   pending;
+   rejected;
+ };
+type Review = 
+ record {
+   comment: text;
+   date: int;
+   id: text;
+   rating: nat;
+   status: ReviewStatus;
+   userName: text;
+ };
+type Result_3 = 
+ variant {
+   err: text;
+   ok;
+ };
+type Result_2 = 
+ variant {
+   err: text;
+   ok: nat;
+ };
+type Result_1 = 
+ variant {
+   err: text;
+   ok: Order;
+ };
+type Result = 
+ variant {
+   err: text;
+   ok: Review;
+ };
+type OrderStatus = 
+ variant {
+   confirmed;
+   delivered;
+   pending;
+ };
+type OrderItem = 
+ record {
+   price: nat;
+   quantity: nat;
+   saladName: text;
+ };
+type Order = 
+ record {
+   assignedRiderId: opt nat;
+   createdAt: Time;
+   deliveryNotes: text;
+   deliveryStatus: DeliveryStatus;
+   deliveryTime: opt Time;
+   deliveryType: variant {
+                   instant;
+                   scheduled: Time;
+                 };
+   id: nat;
+   items: vec OrderItem;
+   status: OrderStatus;
+   totalAmount: nat;
+   user: principal;
+ };
+type MenuItemIngredient = 
+ record {
+   ingredientId: nat;
+   menuItemName: text;
+   quantityPerOrder: nat;
+ };
+type MenuItem = 
+ record {
+   calories: nat;
+   enabled: bool;
+   id: nat;
+   imageUrl: text;
+   ingredients: vec text;
+   linkedIngredients: vec LinkedIngredient;
+   name: text;
+   price: nat;
+   protein: nat;
+   sizes: vec BowlSize;
+   tags: vec text;
+ };
+type LinkedIngredient = 
+ record {
+   ingredientId: nat;
+   quantityGrams: nat;
+ };
+type LeadStatus = 
+ variant {
+   contacted;
+   converted;
+   new;
+ };
+type Lead = 
+ record {
+   date: Time;
+   id: nat;
+   mobile: text;
+   name: text;
+   status: LeadStatus;
+ };
+type Ingredient = 
+ record {
+   id: nat;
+   lowStockThreshold: nat;
+   name: text;
+   quantityInStock: nat;
+   unit: text;
+ };
+type DiscountType = 
+ variant {
+   flat;
+   percentage;
+ };
+type DeliveryType = 
+ variant {
+   instant;
+   scheduled: Time;
+ };
+type DeliveryStatus = 
+ variant {
+   delivered;
+   outForDelivery;
+   preparing;
+   ready;
+ };
+type DeliveryRecord = 
+ record {
+   address: text;
+   customerName: text;
+   deliveryTime: Time;
+   id: nat;
+   notes: text;
+   orderId: nat;
+   riderId: opt nat;
+   status: DeliveryStatus;
+ };
+type Coupon = 
+ record {
+   code: text;
+   discountType: DiscountType;
+   discountValue: nat;
+   expiryDate: Time;
+   id: nat;
+   isActive: bool;
+ };
+type BowlSize = 
+ record {
+   calories: nat;
+   price: nat;
+   protein: nat;
+   size: text;
+ };
+service : {
+  _initializeAccessControl: () -> ();
+  addIngredient: (name: text, unit: text, quantityInStock: nat,
+   lowStockThreshold: nat) -> (nat);
+  addMenuItem: (name: text, price: nat, calories: nat, protein: nat,
+   ingredients: vec text, tags: vec text, sizes: vec BowlSize,
+   linkedIngredients: vec LinkedIngredient, imageUrl: text) -> (nat);
+  addRider: (name: text, mobile: text, area: text) -> (nat);
+  addUserNote: (user: principal, "text": text) -> (nat);
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  assignOrderRider: (orderId: nat, riderId: nat) -> ();
+  assignRider: (deliveryId: nat, riderId: nat) -> ();
+  bulkAssignRider: (deliveryIds: vec nat, riderId: nat) -> ();
+  claimFirstAdminRole: () -> ();
+  createCoupon: (code: text, discountType: DiscountType, discountValue: 
+   nat, expiryDate: Time) -> (nat);
+  createDelivery: (orderId: nat, customerName: text, address: text,
+   deliveryTime: Time, notes: text) -> (nat);
+  createLead: (name: text, mobile: text) -> (nat);
+  createReview: (userName: text, rating: nat, comment: text) -> (Result);
+  createSubscription: (planId: nat) -> ();
+  createSubscriptionPlan: (name: text, totalMeals: nat, price: nat,
+   validityDays: nat, description: text) -> (nat);
+  deleteCoupon: (id: nat) -> ();
+  deleteMenuItem: (id: nat) -> ();
+  deleteReview: (id: text) -> (Result_3);
+  deleteRider: (id: nat) -> ();
+  deleteSubscriptionPlan: (id: nat) -> ();
+  deleteUser: (user: principal) -> ();
+  deleteUserNote: (user: principal, noteId: nat) -> ();
+  getAllCoupons: () -> (vec Coupon) query;
+  getAllDeliveries: () -> (vec DeliveryRecord) query;
+  getAllIngredients: () -> (vec Ingredient) query;
+  getAllMenuItems: () -> (vec MenuItem) query;
+  getAllOrders: () -> (vec Order) query;
+  getAllReviews: () -> (vec Review) query;
+  getAllRiders: () -> (vec Rider) query;
+  getAllSubscriptionPlans: () -> (vec SubscriptionPlan) query;
+  getAllSubscriptions: () -> (vec Subscription) query;
+  getAllUsers: () ->
+   (vec record {
+          "principal": principal;
+          profile: UserProfile;
+        }) query;
+  getApprovedReviews: () -> (vec Review) query;
+  getCallerSubscription: () -> (opt Subscription) query;
+  getCallerUserProfile: () -> (opt UserProfile) query;
+  getCallerUserRole: () -> (UserRole) query;
+  getLeads: () -> (vec Lead) query;
+  getLowStockIngredients: () -> (vec Ingredient) query;
+  getMenuItemIngredients: (menuItemName: text) ->
+   (vec MenuItemIngredient) query;
+  getUserMeta: (user: principal) -> (UserMeta) query;
+  getUserOrders: () -> (vec Order) query;
+  getUserProfile: (user: principal) -> (opt UserProfile) query;
+  hasAdminBeenClaimed: () -> (bool) query;
+  isCallerAdmin: () -> (bool) query;
+  linkIngredientToMenuItem: (menuItemName: text, ingredientId: nat,
+   quantityPerOrder: nat) -> ();
+  placeOrder: (items: vec OrderItem, totalAmount: nat, deliveryType:
+   DeliveryType) -> (Result_2);
+  registerUser: (profile: UserProfile) -> ();
+  saveCallerUserProfile: (profile: UserProfile) -> ();
+  saveUserProfile: (profile: UserProfile) -> ();
+  setUserVip: (user: principal, isVip: bool) -> ();
+  toggleCoupon: (id: nat, isActive: bool) -> ();
+  toggleMenuItem: (id: nat, enabled: bool) -> ();
+  updateDeliveryNote: (id: nat, notes: text) -> ();
+  updateDeliveryStatus: (id: nat, status: DeliveryStatus) -> ();
+  updateIngredientStock: (id: nat, newQuantity: nat) -> ();
+  updateLeadStatus: (id: nat, status: LeadStatus) -> (bool);
+  updateMenuItem: (id: nat, name: text, price: nat, calories: nat, protein:
+   nat, ingredients: vec text, tags: vec text, sizes: vec BowlSize,
+   linkedIngredients: vec LinkedIngredient, imageUrl: text) -> ();
+  updateOrder: (orderId: nat, deliveryStatus: opt DeliveryStatus,
+   assignedRiderId: opt nat, deliveryNotes: opt text) -> (Result_1);
+  updateOrderDeliveryNotes: (orderId: nat, notes: text) -> ();
+  updateOrderDeliveryStatus: (orderId: nat, deliveryStatus:
+   DeliveryStatus) -> ();
+  updateOrderStatus: (orderId: nat, status: OrderStatus) -> ();
+  updateReviewStatus: (id: text, status: ReviewStatus) -> (Result);
+  updateRider: (id: nat, name: text, mobile: text, area: text) -> ();
+  updateSubscriptionPlan: (id: nat, name: text, totalMeals: nat, price: 
+   nat, validityDays: nat, description: text) -> ();
+  updateSubscriptionStatus: (user: principal, status:
+   variant {
+     active;
+     expired;
+   }) -> ();
+  updateUserProfile: (profile: UserProfile) -> ();
+  updateUserProfileByAdmin: (user: principal, profile: UserProfile) -> ();
+  validateCoupon: (code: text) -> (Coupon) query;
+}

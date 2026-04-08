@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DeliveryType, OrderItem, UserProfile } from "../backend";
+import type {
+  DeliveryType,
+  OrderItem,
+  Result_2,
+  UserProfile,
+} from "../backend";
 import { useActor } from "./useActor";
 
 const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 30000);
@@ -110,25 +115,25 @@ export function useRegisterUser() {
 export function usePlaceOrder() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      items,
-      totalAmount,
-      deliveryType,
-    }: {
-      items: Array<OrderItem>;
-      totalAmount: bigint;
-      deliveryType: DeliveryType;
-    }) => {
+  return useMutation<
+    Result_2,
+    Error,
+    { items: Array<OrderItem>; totalAmount: bigint; deliveryType: DeliveryType }
+  >({
+    mutationFn: async ({ items, totalAmount, deliveryType }) => {
       if (!actor) throw new Error("Not authenticated");
-      return actor.placeOrder(items, totalAmount, deliveryType);
+      const result = await actor.placeOrder(items, totalAmount, deliveryType);
+      // Surface backend errors as JS errors so React Query's onError fires
+      if (result.__kind__ === "err") {
+        throw new Error(result.err);
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userOrders"] });
       queryClient.invalidateQueries({ queryKey: ["userSubscription"] });
     },
-    retry: 2,
-    retryDelay,
+    retry: 0, // Never retry order placement — avoid duplicate deductions
   });
 }
 

@@ -32,6 +32,7 @@ export default function Cart() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const isScheduleValid =
     delivery !== "scheduled" || (schedDate !== "" && schedTime !== "");
@@ -80,6 +81,8 @@ export default function Cart() {
       return;
     }
 
+    setOrderError(null);
+
     const orderItems = items.map((item) => ({
       saladName: item.name,
       quantity: BigInt(item.quantity),
@@ -103,8 +106,13 @@ export default function Cart() {
       clearCart();
       toast.success("Order placed! Check your dashboard for updates. 🥗");
       navigate({ to: "/dashboard" });
-    } catch {
-      toast.error("Failed to place order. Please try again.");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to place order. Please try again.";
+      setOrderError(msg);
+      toast.error(msg);
     }
   };
 
@@ -470,6 +478,24 @@ export default function Cart() {
                     >
                       Renew
                     </a>
+                  </div>
+                )}
+
+                {orderError && !subscriptionEnded && (
+                  <div
+                    className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium mb-3"
+                    data-ocid="cart.stock_error"
+                  >
+                    <span className="shrink-0 text-base">🚫</span>
+                    <span className="flex-1">{orderError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setOrderError(null)}
+                      className="ml-2 shrink-0 text-red-400 hover:text-red-700 transition-colors"
+                      aria-label="Dismiss error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
 
